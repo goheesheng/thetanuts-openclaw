@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "thetanuts": {
+      "command": "node",
+      "args": ["./node_modules/@thetanuts-finance/thetanuts-client/mcp-server/dist/index.js"],
+      "env": {
+        "THETANUTS_RPC_URL": "https://mainnet.base.org"
+      }
+    }
+  }
+}

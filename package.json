@@ -1,0 +1,26 @@
+{
+  "name": "thetanuts-openclaw-skill",
+  "version": "1.0.0",
+  "description": "OpenClaw skill for trading crypto options on Thetanuts Finance",
+  "type": "module",
+  "scripts": {
+    "get-prices": "npx tsx scripts/get-prices.ts",
+    "get-mm-pricing": "npx tsx scripts/get-mm-pricing.ts",
+    "get-positions": "npx tsx scripts/get-positions.ts",
+    "build-rfq": "npx tsx scripts/build-rfq.ts",
+    "fetch-orders": "npx tsx scripts/fetch-orders.ts",
+    "calculate-payout": "npx tsx scripts/calculate-payout.ts"
+  },
+  "dependencies": {
+    "@thetanuts-finance/thetanuts-client": "^0.1.5",
+    "ethers": "^6.13.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -5,57 +5,33 @@ OpenClaw skill for trading crypto options on [Thetanuts Finance](https://thetanu
 ## Features
 
 - Get real-time option prices (MM pricing)
-- Build RFQ requests for vanilla options, spreads, butterflies, condors
-- Check user positions and trade history
-- Calculate payoffs, collateral requirements, and contract sizes
-- Validate multi-leg option structures
+- Build RFQ requests for vanilla options
+- Check user positions
+- Fetch orderbook
+- Calculate option payoffs at settlement
 
 ## Prerequisites
 
-1. [OpenClaw](https://docs.openclaw.ai/) installed and running
-2. [Thetanuts SDK](https://github.com/Thetanuts-Finance/thetanuts-sdk) MCP server built
+- [OpenClaw](https://docs.openclaw.ai/) installed and running
+- Node.js >= 18.0.0
 
 ## Installation
 
-### Step 1: Clone this repo to your OpenClaw workspace
+### Step 1: Clone to OpenClaw workspace
 
 ```bash
 cd ~/.openclaw/workspace/skills
-git clone https://github.com/Thetanuts-Finance/thetanuts-openclaw.git thetanuts-client
+git clone https://github.com/Thetanuts-Finance/thetanuts-openclaw.git thetanuts
 ```
 
-Or copy manually:
-```bash
-cp -r /path/to/thetanuts_openclaw/skills/thetanuts-client ~/.openclaw/workspace/skills/
-```
-
-### Step 2: Build the MCP server
+### Step 2: Install dependencies
 
 ```bash
-cd /path/to/thetanuts-sdk/mcp-server
+cd ~/.openclaw/workspace/skills/thetanuts
 npm install
-npm run build
 ```
 
-### Step 3: Configure the MCP server
-
-Add to your `~/.openclaw/openclaw.json`:
-
-```json
-{
-  "mcp": {
-    "thetanuts": {
-      "command": "node",
-      "args": ["/path/to/thetanuts-sdk/mcp-server/dist/index.js"],
-      "env": {
-        "THETANUTS_RPC_URL": "https://mainnet.base.org"
-      }
-    }
-  }
-}
-```
-
-### Step 4: Reload OpenClaw
+### Step 3: Reload OpenClaw
 
 Start a new session to load the skill:
 ```
@@ -70,29 +46,130 @@ Once installed, you can ask questions like:
 
 - "What's the current ETH price?"
 - "Show me ETH put options"
-- "I want to buy 1000 USDC worth of ETH 2500 put expiring March 28"
+- "I want to buy 0.1 ETH 2000 put expiring March 28"
 - "Check positions for 0x..."
 - "What's the payoff if ETH settles at 2200?"
-- "Validate butterfly with strikes 2400, 2500, 2600"
+- "Show me the orderbook for ETH puts"
 
-## Available Tools
+## Available Scripts
 
-The skill provides access to 65 MCP tools:
+The skill uses the `exec` tool to run these scripts:
 
-| Category | Tools |
-|----------|-------|
-| Market Data | `get_market_data`, `get_mm_all_pricing`, `get_mm_ticker_pricing`, etc. |
-| User Data | `get_user_positions`, `get_user_history`, `get_user_rfqs` |
-| RFQ Building | `build_rfq_request`, `build_spread_rfq`, `build_butterfly_rfq`, etc. |
-| Calculations | `calculate_num_contracts`, `calculate_collateral_required`, `calculate_payout` |
-| Validation | `validate_butterfly`, `validate_condor`, `validate_iron_condor` |
+| Script | Description |
+|--------|-------------|
+| `get-prices.ts` | Get current BTC, ETH prices and protocol stats |
+| `get-mm-pricing.ts` | Get MM option pricing with filters |
+| `get-positions.ts` | Get user positions by wallet address |
+| `build-rfq.ts` | Build RFQ transaction data |
+| `fetch-orders.ts` | Fetch orderbook with filters |
+| `calculate-payout.ts` | Calculate option payout at settlement |
 
-See `SKILL.md` for the complete list.
+### Script Details
+
+#### Get Market Prices
+```bash
+npx tsx scripts/get-prices.ts
+```
+Returns current BTC, ETH prices and protocol stats.
+
+#### Get MM Option Pricing
+```bash
+npx tsx scripts/get-mm-pricing.ts <underlying> [--type PUT|CALL] [--expiry DDMMMYY]
+```
+Arguments:
+- `underlying` (required): ETH or BTC
+- `--type`: Filter by PUT or CALL (optional)
+- `--expiry`: Filter by expiry date like "28MAR26" (optional)
+
+Examples:
+```bash
+npx tsx scripts/get-mm-pricing.ts ETH
+npx tsx scripts/get-mm-pricing.ts ETH --type PUT
+npx tsx scripts/get-mm-pricing.ts BTC --expiry 28MAR26
+```
+
+#### Get User Positions
+```bash
+npx tsx scripts/get-positions.ts <wallet_address>
+```
+Arguments:
+- `wallet_address` (required): User's Ethereum address (0x + 40 hex chars)
+
+Example:
+```bash
+npx tsx scripts/get-positions.ts 0x1234567890abcdef1234567890abcdef12345678
+```
+
+#### Build RFQ Request
+```bash
+npx tsx scripts/build-rfq.ts --underlying <ETH|BTC> --type <PUT|CALL> --strike <price> --expiry <timestamp> --contracts <amount> --direction <buy|sell> [--collateral USDC|WETH] [--deadline <minutes>]
+```
+Arguments:
+- `--underlying` (required): ETH or BTC
+- `--type` (required): PUT or CALL
+- `--strike` (required): Strike price in USD (e.g., 2500)
+- `--expiry` (required): Unix timestamp of expiry (8:00 UTC on expiry date)
+- `--contracts` (required): Number of contracts
+- `--direction` (required): buy or sell
+- `--collateral` (optional): USDC or WETH (default: USDC)
+- `--deadline` (optional): Offer deadline in minutes (default: 60)
+
+Example:
+```bash
+npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
+```
+
+#### Fetch Orderbook
+```bash
+npx tsx scripts/fetch-orders.ts [--underlying ETH|BTC] [--type PUT|CALL]
+```
+Arguments:
+- `--underlying`: Filter by ETH or BTC (optional)
+- `--type`: Filter by PUT or CALL (optional)
+
+Example:
+```bash
+npx tsx scripts/fetch-orders.ts --underlying ETH --type PUT
+```
+
+#### Calculate Payout
+```bash
+npx tsx scripts/calculate-payout.ts --type <PUT|CALL> --strike <price> --settlement <price> --contracts <amount> [--is-buyer]
+```
+Arguments:
+- `--type` (required): PUT or CALL
+- `--strike` (required): Strike price
+- `--settlement` (required): Settlement price to calculate
+- `--contracts` (required): Number of contracts
+- `--is-buyer`: Include if calculating buyer payout (default: seller)
+
+Example:
+```bash
+npx tsx scripts/calculate-payout.ts --type PUT --strike 2500 --settlement 2200 --contracts 1 --is-buyer
+```
+
+## Configuration
+
+Set custom RPC URL via environment variable:
+
+```bash
+export THETANUTS_RPC_URL="https://your-rpc-url.com"
+```
+
+Default: `https://mainnet.base.org` (Base Mainnet, Chain ID 8453)
+
+## Ticker Format
+
+Options use: `{UNDERLYING}-{EXPIRY}-{STRIKE}-{TYPE}`
+
+Examples:
+- `ETH-28MAR26-2500-P` = ETH Put, $2500 strike, March 28 2026 expiry
+- `BTC-28MAR26-95000-C` = BTC Call, $95000 strike, March 28 2026 expiry
 
 ## Safety
 
 This skill is **READ-ONLY**:
-- Tools return transaction data but don't execute transactions
+- Scripts return transaction data but don't execute transactions
 - Users must sign transactions with their own wallet
 - No private keys are handled
 

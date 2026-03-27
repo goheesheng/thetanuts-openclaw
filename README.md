@@ -6,6 +6,7 @@ OpenClaw skill for trading crypto options on [Thetanuts Finance](https://thetanu
 
 - **Wallet Management**: Create and import EVM/Solana wallets using Tether WDK
 - **Balance Queries**: Check native (ETH/SOL) and token balances (USDC, WETH, cbBTC)
+- **Transaction Execution**: Approve tokens and send transactions directly
 - **Options Trading**: Get MM pricing, build RFQs, fetch orderbook
 - **Position Tracking**: Check user positions and calculate payoffs
 
@@ -57,6 +58,8 @@ Once installed, you can ask questions like:
 | `import-wallet.ts` | Import existing wallet from seed phrase |
 | `get-balance.ts` | Get native and token balances |
 | `sign-message.ts` | Sign messages for authentication |
+| `approve-token.ts` | Approve ERC20 token spending |
+| `send-transaction.ts` | Sign and broadcast transactions |
 
 ### Create New Wallet
 
@@ -85,6 +88,22 @@ npx tsx scripts/get-balance.ts --chain evm --seed "..." --token 0x833589fCD6eDb6
 
 ```bash
 npx tsx scripts/sign-message.ts --chain evm --seed "..." --message "Hello"
+```
+
+### Approve Token Spending
+
+```bash
+# Approve max USDC for Thetanuts
+npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+
+# Approve specific amount
+npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --amount 100 --seed "..." --wait
+```
+
+### Send Transaction
+
+```bash
+npx tsx scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "..." --wait
 ```
 
 ## Trading Scripts
@@ -122,17 +141,25 @@ npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 
    npx tsx scripts/get-balance.ts --chain evm --seed "your seed phrase"
    ```
 
-3. **View available options**:
+3. **Approve USDC** for Thetanuts (one-time per token):
+   ```bash
+   npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+   ```
+
+4. **View available options**:
    ```bash
    npx tsx scripts/get-mm-pricing.ts ETH --type PUT
    ```
 
-4. **Build RFQ transaction**:
+5. **Build RFQ transaction**:
    ```bash
    npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
    ```
 
-5. **Sign and submit** transaction with your wallet
+6. **Send transaction** using `to` and `data` from step 5:
+   ```bash
+   npx tsx scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "..." --wait
+   ```
 
 ## Configuration
 
@@ -144,20 +171,22 @@ export THETANUTS_RPC_URL="https://mainnet.base.org"
 export SOLANA_RPC_URL="https://api.mainnet-beta.solana.com"
 ```
 
-## Common Token Addresses (Base)
+## Contract Addresses (Base)
 
-| Token | Address |
-|-------|---------|
+| Contract | Address |
+|----------|---------|
 | USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | WETH | `0x4200000000000000000000000000000000000006` |
 | cbBTC | `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf` |
+| Thetanuts RFQ | `0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5` |
 
 ## Security Considerations
 
 - **SEED PHRASES**: Save securely, never share. Scripts display seed only during creation.
 - **KEY DISPOSAL**: Wallet scripts automatically clear keys from memory after use.
-- **READ-ONLY TRADING**: Trading scripts return transaction data but don't execute.
-- **USER SIGNS**: You must sign transactions with your own wallet.
+- **TRANSACTIONS**: Transactions are IRREVERSIBLE once broadcast. Verify before sending.
+- **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts.
+- **GAS**: Ensure wallet has ETH on Base network for gas fees.
 
 ## License
 

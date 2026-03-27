@@ -85,6 +85,63 @@ Example:
 npx tsx {baseDir}/scripts/sign-message.ts --chain evm --seed "..." --message "Authenticate to Thetanuts"
 ```
 
+## Transaction Execution
+
+### Approve Token Spending
+Before trading, you must approve the Thetanuts contract to spend your tokens (USDC, WETH, etc.):
+```bash
+npx tsx {baseDir}/scripts/approve-token.ts --token <address> --spender <address> (--amount <number> | --max) --seed "<seed phrase>" [--wait]
+```
+Arguments:
+- `--token` (required): Token contract address
+- `--spender` (required): Spender contract address (Thetanuts RFQ)
+- `--amount` (required unless --max): Amount to approve in token units (e.g., 100 for 100 USDC)
+- `--max` (optional): Approve unlimited spending (max uint256)
+- `--seed` (required): Your seed phrase
+- `--index` (optional): Account index, default 0
+- `--wait` (optional): Wait for transaction confirmation
+
+Common addresses:
+| Contract | Address |
+|----------|---------|
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| WETH | `0x4200000000000000000000000000000000000006` |
+| cbBTC | `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf` |
+| Thetanuts RFQ | `0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5` |
+
+Examples:
+```bash
+# Approve max USDC for Thetanuts
+npx tsx {baseDir}/scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+
+# Approve specific amount (100 USDC)
+npx tsx {baseDir}/scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --amount 100 --seed "..." --wait
+```
+
+### Send Transaction
+Sign and broadcast a transaction using your wallet:
+```bash
+npx tsx {baseDir}/scripts/send-transaction.ts --to <address> --data <hex> --seed "<seed phrase>" [--value <wei>] [--gas-limit <number>] [--gas-price <gwei>] [--wait] [--timeout <ms>]
+```
+Arguments:
+- `--to` (required): Target contract address
+- `--data` (required): Transaction calldata (hex string from build-rfq.ts)
+- `--seed` (required): Your seed phrase
+- `--value` (optional): ETH to send in wei, default "0"
+- `--index` (optional): Account index, default 0
+- `--gas-limit` (optional): Override gas limit
+- `--gas-price` (optional): Gas price in gwei
+- `--wait` (optional): Wait for confirmation
+- `--timeout` (optional): Confirmation timeout in ms, default 60000
+
+Example:
+```bash
+# Send transaction from build-rfq output
+npx tsx {baseDir}/scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "..." --wait
+```
+
+**WARNING**: Transactions are IRREVERSIBLE once broadcast. Always verify the destination and amount.
+
 ## Trading Commands
 
 ### Get Market Prices
@@ -174,9 +231,10 @@ npx tsx {baseDir}/scripts/calculate-payout.ts --type PUT --strike 2500 --settlem
 ### Complete Trading Workflow (with Wallet)
 1. Create or import a wallet
 2. Check wallet balance to ensure sufficient funds
-3. Get MM pricing to find available options
-4. Build RFQ with desired parameters
-5. User signs transaction with their wallet
+3. Approve token spending for Thetanuts (one-time per token)
+4. Get MM pricing to find available options
+5. Build RFQ with desired parameters
+6. Send transaction to execute the trade
 
 Example:
 ```
@@ -187,15 +245,19 @@ Agent:
    npx tsx {baseDir}/scripts/create-wallet.ts --chain evm
 
 2. Check your balance:
-   npx tsx {baseDir}/scripts/get-balance.ts --chain evm --seed "your seed phrase"
+   npx tsx {baseDir}/scripts/get-balance.ts --chain evm --seed "..."
 
-3. Show available ETH puts:
+3. Approve USDC spending (one-time):
+   npx tsx {baseDir}/scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+
+4. Show available ETH puts:
    npx tsx {baseDir}/scripts/get-mm-pricing.ts ETH --type PUT
 
-4. Build the RFQ (user chooses strike $2000, expiry March 28):
+5. Build the RFQ (user chooses strike $2000, expiry March 28):
    npx tsx {baseDir}/scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
 
-5. Return transaction data for user to sign
+6. Send the transaction using the `to` and `data` from step 5:
+   npx tsx {baseDir}/scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "..." --wait
 ```
 
 ### Check Option Prices
@@ -231,10 +293,11 @@ Examples:
 ## Security Notes
 
 - **SEED PHRASES**: Never log, store, or transmit seed phrases except when displaying to user during wallet creation
+- **TRANSACTIONS**: Transactions are IRREVERSIBLE once broadcast. Always verify destination and amount before sending.
+- **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts. Use `--max` carefully.
 - **SIGNING**: Always warn users before signing messages or transactions
-- **READ-ONLY TRADING**: Trading scripts return data but DON'T execute transactions
-- **USER SIGNS**: Return transaction data for user to sign with their wallet
 - **DISPOSAL**: Wallet scripts automatically clear keys from memory after use
+- **GAS**: Ensure wallet has ETH for gas fees on Base network
 
 ## Network Configuration
 

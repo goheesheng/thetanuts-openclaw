@@ -1,6 +1,6 @@
 ---
 name: thetanuts
-description: Trade crypto options on Thetanuts Finance - get MM pricing, build RFQs, analyze positions
+description: Trade crypto options on Thetanuts Finance - get MM pricing, build RFQs, analyze positions, manage wallets
 homepage: https://github.com/Thetanuts-Finance/thetanuts-sdk
 user-invocable: true
 metadata: {"openclaw":{"emoji":"📈","install":[{"type":"node","package":"."}]}}
@@ -8,7 +8,7 @@ metadata: {"openclaw":{"emoji":"📈","install":[{"type":"node","package":"."}]}
 
 # Thetanuts Options Trading
 
-You help users trade crypto options on Thetanuts Finance using the Thetanuts SDK.
+You help users trade crypto options on Thetanuts Finance using the Thetanuts SDK and manage their wallets using the Tether WDK.
 
 ## Setup
 
@@ -17,9 +17,75 @@ Before first use, install dependencies:
 cd {baseDir} && npm install
 ```
 
-## Available Commands
+## Wallet Management
 
-Use the `exec` tool to run these scripts from `{baseDir}/scripts/`:
+### Create New Wallet
+```bash
+npx tsx {baseDir}/scripts/create-wallet.ts --chain <evm|solana> [--index <number>]
+```
+Arguments:
+- `--chain` (required): `evm` for Base/Ethereum or `solana` for Solana
+- `--index` (optional): Account index, default 0
+
+Examples:
+```bash
+npx tsx {baseDir}/scripts/create-wallet.ts --chain evm
+npx tsx {baseDir}/scripts/create-wallet.ts --chain solana
+```
+
+**SECURITY**: The output includes your seed phrase. Save it securely and never share it.
+
+### Import Existing Wallet
+```bash
+npx tsx {baseDir}/scripts/import-wallet.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>]
+```
+Arguments:
+- `--chain` (required): `evm` or `solana`
+- `--seed` (required): Your 12 or 24 word BIP-39 seed phrase
+- `--index` (optional): Account index, default 0
+
+Example:
+```bash
+npx tsx {baseDir}/scripts/import-wallet.ts --chain evm --seed "word1 word2 word3 ... word12"
+```
+
+### Get Wallet Balance
+```bash
+npx tsx {baseDir}/scripts/get-balance.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>] [--token <address>]
+```
+Arguments:
+- `--chain` (required): `evm` or `solana`
+- `--seed` (required): Your seed phrase
+- `--index` (optional): Account index, default 0
+- `--token` (optional): Token contract address for ERC20/SPL balance
+
+Common Base tokens:
+- USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- WETH: `0x4200000000000000000000000000000000000006`
+- cbBTC: `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf`
+
+Examples:
+```bash
+npx tsx {baseDir}/scripts/get-balance.ts --chain evm --seed "..."
+npx tsx {baseDir}/scripts/get-balance.ts --chain evm --seed "..." --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+```
+
+### Sign Message
+```bash
+npx tsx {baseDir}/scripts/sign-message.ts --chain <evm|solana> --seed "<seed phrase>" --message "<message>" [--index <number>]
+```
+Arguments:
+- `--chain` (required): `evm` or `solana`
+- `--seed` (required): Your seed phrase
+- `--message` (required): Message to sign
+- `--index` (optional): Account index, default 0
+
+Example:
+```bash
+npx tsx {baseDir}/scripts/sign-message.ts --chain evm --seed "..." --message "Authenticate to Thetanuts"
+```
+
+## Trading Commands
 
 ### Get Market Prices
 ```bash
@@ -105,17 +171,38 @@ npx tsx {baseDir}/scripts/calculate-payout.ts --type PUT --strike 2500 --settlem
 
 ## Common Workflows
 
+### Complete Trading Workflow (with Wallet)
+1. Create or import a wallet
+2. Check wallet balance to ensure sufficient funds
+3. Get MM pricing to find available options
+4. Build RFQ with desired parameters
+5. User signs transaction with their wallet
+
+Example:
+```
+User: "I want to buy an ETH put option"
+
+Agent:
+1. First, do you have a wallet? If not:
+   npx tsx {baseDir}/scripts/create-wallet.ts --chain evm
+
+2. Check your balance:
+   npx tsx {baseDir}/scripts/get-balance.ts --chain evm --seed "your seed phrase"
+
+3. Show available ETH puts:
+   npx tsx {baseDir}/scripts/get-mm-pricing.ts ETH --type PUT
+
+4. Build the RFQ (user chooses strike $2000, expiry March 28):
+   npx tsx {baseDir}/scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
+
+5. Return transaction data for user to sign
+```
+
 ### Check Option Prices
 1. Ask user for underlying (ETH or BTC)
 2. Run `get-mm-pricing.ts ETH` to show all available options
 3. Filter with `--type PUT` or `--expiry 28MAR26` as needed
 4. Explain pricing: bid/ask, IV, greeks
-
-Example conversation:
-```
-User: "What are the current ETH put options?"
-Agent: Run get-mm-pricing.ts ETH --type PUT, then summarize available strikes and expiries
-```
 
 ### Build an RFQ
 1. Gather from user: underlying, strike, expiry, direction (buy/sell), size
@@ -123,17 +210,8 @@ Agent: Run get-mm-pricing.ts ETH --type PUT, then summarize available strikes an
 3. Run `build-rfq.ts` with the parameters
 4. Return the `to` and `data` fields for user to sign with their wallet
 
-Example conversation:
-```
-User: "I want to buy 0.1 ETH 2000 put expiring March 28"
-Agent:
-1. Convert March 28 2026 8:00 UTC to timestamp: 1774684800
-2. Run: npx tsx {baseDir}/scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
-3. Return transaction data for signing
-```
-
 ### Check User Positions
-1. Get wallet address from user
+1. Get wallet address from user (or derive from seed with import-wallet)
 2. Run `get-positions.ts 0xWalletAddress`
 3. Show positions with current P&L if available
 
@@ -150,12 +228,19 @@ Examples:
 - `ETH-28MAR26-2500-P` = ETH Put, $2500 strike, March 28 2026 expiry
 - `BTC-28MAR26-95000-C` = BTC Call, $95000 strike, March 28 2026 expiry
 
-## Important Notes
+## Security Notes
 
-- **READ-ONLY**: Scripts return data but DON'T execute transactions
-- **User must sign**: Return transaction data for user to sign with their wallet
-- **No private keys**: Never handle or request private keys
-- **Expiry**: Use 8:00 UTC on expiry date for MM acceptance
-- **Chain**: Base Mainnet (Chain ID 8453)
+- **SEED PHRASES**: Never log, store, or transmit seed phrases except when displaying to user during wallet creation
+- **SIGNING**: Always warn users before signing messages or transactions
+- **READ-ONLY TRADING**: Trading scripts return data but DON'T execute transactions
+- **USER SIGNS**: Return transaction data for user to sign with their wallet
+- **DISPOSAL**: Wallet scripts automatically clear keys from memory after use
+
+## Network Configuration
+
+- **EVM Chain**: Base Mainnet (Chain ID 8453)
+- **EVM RPC**: Set `THETANUTS_RPC_URL` env var (default: https://mainnet.base.org)
+- **Solana RPC**: Set `SOLANA_RPC_URL` env var (default: https://api.mainnet-beta.solana.com)
 - **Collateral**: USDC (6 decimals), WETH (18 decimals), cbBTC (8 decimals)
 - **Strikes**: Displayed in USD, converted to 8 decimals internally
+- **Expiry**: Use 8:00 UTC on expiry date for MM acceptance

@@ -1,14 +1,13 @@
 # Thetanuts OpenClaw Skill
 
-OpenClaw skill for trading crypto options on [Thetanuts Finance](https://thetanuts.finance).
+OpenClaw skill for trading crypto options on [Thetanuts Finance](https://thetanuts.finance) with integrated wallet management.
 
 ## Features
 
-- Get real-time option prices (MM pricing)
-- Build RFQ requests for vanilla options
-- Check user positions
-- Fetch orderbook
-- Calculate option payoffs at settlement
+- **Wallet Management**: Create and import EVM/Solana wallets using Tether WDK
+- **Balance Queries**: Check native (ETH/SOL) and token balances (USDC, WETH, cbBTC)
+- **Options Trading**: Get MM pricing, build RFQs, fetch orderbook
+- **Position Tracking**: Check user positions and calculate payoffs
 
 ## Prerequisites
 
@@ -44,16 +43,51 @@ Or restart the gateway.
 
 Once installed, you can ask questions like:
 
-- "What's the current ETH price?"
+- "Create a new EVM wallet for me"
+- "Check my wallet balance" (provide seed phrase)
 - "Show me ETH put options"
 - "I want to buy 0.1 ETH 2000 put expiring March 28"
 - "Check positions for 0x..."
-- "What's the payoff if ETH settles at 2200?"
-- "Show me the orderbook for ETH puts"
 
-## Available Scripts
+## Wallet Management Scripts
 
-The skill uses the `exec` tool to run these scripts:
+| Script | Description |
+|--------|-------------|
+| `create-wallet.ts` | Create new EVM or Solana wallet |
+| `import-wallet.ts` | Import existing wallet from seed phrase |
+| `get-balance.ts` | Get native and token balances |
+| `sign-message.ts` | Sign messages for authentication |
+
+### Create New Wallet
+
+```bash
+npx tsx scripts/create-wallet.ts --chain evm
+npx tsx scripts/create-wallet.ts --chain solana
+```
+
+### Import Existing Wallet
+
+```bash
+npx tsx scripts/import-wallet.ts --chain evm --seed "word1 word2 ... word12"
+```
+
+### Check Balance
+
+```bash
+# Native balance
+npx tsx scripts/get-balance.ts --chain evm --seed "..."
+
+# With USDC token balance
+npx tsx scripts/get-balance.ts --chain evm --seed "..." --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+```
+
+### Sign Message
+
+```bash
+npx tsx scripts/sign-message.ts --chain evm --seed "..." --message "Hello"
+```
+
+## Trading Scripts
 
 | Script | Description |
 |--------|-------------|
@@ -64,114 +98,66 @@ The skill uses the `exec` tool to run these scripts:
 | `fetch-orders.ts` | Fetch orderbook with filters |
 | `calculate-payout.ts` | Calculate option payout at settlement |
 
-### Script Details
+### Get Option Pricing
 
-#### Get Market Prices
 ```bash
-npx tsx scripts/get-prices.ts
-```
-Returns current BTC, ETH prices and protocol stats.
-
-#### Get MM Option Pricing
-```bash
-npx tsx scripts/get-mm-pricing.ts <underlying> [--type PUT|CALL] [--expiry DDMMMYY]
-```
-Arguments:
-- `underlying` (required): ETH or BTC
-- `--type`: Filter by PUT or CALL (optional)
-- `--expiry`: Filter by expiry date like "28MAR26" (optional)
-
-Examples:
-```bash
-npx tsx scripts/get-mm-pricing.ts ETH
 npx tsx scripts/get-mm-pricing.ts ETH --type PUT
-npx tsx scripts/get-mm-pricing.ts BTC --expiry 28MAR26
 ```
 
-#### Get User Positions
-```bash
-npx tsx scripts/get-positions.ts <wallet_address>
-```
-Arguments:
-- `wallet_address` (required): User's Ethereum address (0x + 40 hex chars)
+### Build RFQ
 
-Example:
-```bash
-npx tsx scripts/get-positions.ts 0x1234567890abcdef1234567890abcdef12345678
-```
-
-#### Build RFQ Request
-```bash
-npx tsx scripts/build-rfq.ts --underlying <ETH|BTC> --type <PUT|CALL> --strike <price> --expiry <timestamp> --contracts <amount> --direction <buy|sell> [--collateral USDC|WETH] [--deadline <minutes>]
-```
-Arguments:
-- `--underlying` (required): ETH or BTC
-- `--type` (required): PUT or CALL
-- `--strike` (required): Strike price in USD (e.g., 2500)
-- `--expiry` (required): Unix timestamp of expiry (8:00 UTC on expiry date)
-- `--contracts` (required): Number of contracts
-- `--direction` (required): buy or sell
-- `--collateral` (optional): USDC or WETH (default: USDC)
-- `--deadline` (optional): Offer deadline in minutes (default: 60)
-
-Example:
 ```bash
 npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
 ```
 
-#### Fetch Orderbook
-```bash
-npx tsx scripts/fetch-orders.ts [--underlying ETH|BTC] [--type PUT|CALL]
-```
-Arguments:
-- `--underlying`: Filter by ETH or BTC (optional)
-- `--type`: Filter by PUT or CALL (optional)
+## Complete Trading Workflow
 
-Example:
-```bash
-npx tsx scripts/fetch-orders.ts --underlying ETH --type PUT
-```
+1. **Create wallet** (or import existing):
+   ```bash
+   npx tsx scripts/create-wallet.ts --chain evm
+   ```
 
-#### Calculate Payout
-```bash
-npx tsx scripts/calculate-payout.ts --type <PUT|CALL> --strike <price> --settlement <price> --contracts <amount> [--is-buyer]
-```
-Arguments:
-- `--type` (required): PUT or CALL
-- `--strike` (required): Strike price
-- `--settlement` (required): Settlement price to calculate
-- `--contracts` (required): Number of contracts
-- `--is-buyer`: Include if calculating buyer payout (default: seller)
+2. **Check balance**:
+   ```bash
+   npx tsx scripts/get-balance.ts --chain evm --seed "your seed phrase"
+   ```
 
-Example:
-```bash
-npx tsx scripts/calculate-payout.ts --type PUT --strike 2500 --settlement 2200 --contracts 1 --is-buyer
-```
+3. **View available options**:
+   ```bash
+   npx tsx scripts/get-mm-pricing.ts ETH --type PUT
+   ```
+
+4. **Build RFQ transaction**:
+   ```bash
+   npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
+   ```
+
+5. **Sign and submit** transaction with your wallet
 
 ## Configuration
 
-Set custom RPC URL via environment variable:
-
 ```bash
-export THETANUTS_RPC_URL="https://your-rpc-url.com"
+# EVM RPC (default: Base Mainnet)
+export THETANUTS_RPC_URL="https://mainnet.base.org"
+
+# Solana RPC (default: Mainnet)
+export SOLANA_RPC_URL="https://api.mainnet-beta.solana.com"
 ```
 
-Default: `https://mainnet.base.org` (Base Mainnet, Chain ID 8453)
+## Common Token Addresses (Base)
 
-## Ticker Format
+| Token | Address |
+|-------|---------|
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| WETH | `0x4200000000000000000000000000000000000006` |
+| cbBTC | `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf` |
 
-Options use: `{UNDERLYING}-{EXPIRY}-{STRIKE}-{TYPE}`
+## Security Considerations
 
-Examples:
-- `ETH-28MAR26-2500-P` = ETH Put, $2500 strike, March 28 2026 expiry
-- `BTC-28MAR26-95000-C` = BTC Call, $95000 strike, March 28 2026 expiry
-
-## Safety
-
-This skill is **READ-ONLY**:
-- Scripts return transaction data but don't execute transactions
-- Users must sign transactions with their own wallet
-- No private keys are handled
+- **SEED PHRASES**: Save securely, never share. Scripts display seed only during creation.
+- **KEY DISPOSAL**: Wallet scripts automatically clear keys from memory after use.
+- **READ-ONLY TRADING**: Trading scripts return transaction data but don't execute.
+- **USER SIGNS**: You must sign transactions with your own wallet.
 
 ## License
 
@@ -181,4 +167,5 @@ MIT
 
 - [Thetanuts Finance](https://thetanuts.finance)
 - [Thetanuts SDK](https://github.com/Thetanuts-Finance/thetanuts-sdk)
+- [Tether WDK](https://docs.wdk.tether.io)
 - [OpenClaw Docs](https://docs.openclaw.ai/)

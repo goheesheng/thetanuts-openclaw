@@ -103,6 +103,12 @@ async function main() {
     // User will need to replace this or provide --requester
     const requesterAddress = params.requester || '0x0000000000000000000000000000000000000001';
 
+    // Determine correct collateral based on option type:
+    // - PUT options use USDC (quote asset)
+    // - CALL options (INVERSE_CALL) use WETH (base asset)
+    const defaultCollateral = params.type === 'CALL' ? 'WETH' : 'USDC';
+    const collateralToken = params.collateral || defaultCollateral;
+
     // Build RFQ request (synchronous)
     const rfqRequest = client.optionFactory.buildRFQRequest({
       requester: requesterAddress,
@@ -112,7 +118,7 @@ async function main() {
       expiry: params.expiry,
       numContracts: params.contracts,
       isLong: params.direction === 'buy',
-      collateralToken: params.collateral || 'USDC',
+      collateralToken,
       offerDeadlineMinutes: params.deadlineMinutes || 6,  // 6 min default for faster MM response
     });
 
@@ -138,6 +144,10 @@ async function main() {
         contracts: params.contracts,
         direction: params.direction,
         isBuy: params.direction === 'buy',
+        collateral: collateralToken,
+        collateralNote: params.type === 'CALL'
+          ? 'CALL options (INVERSE_CALL) require WETH collateral'
+          : 'PUT options require USDC collateral',
       },
       transaction: {
         to: encoded.to,

@@ -79,6 +79,20 @@ A **CALL** gives the holder the right to BUY at the strike price.
 | **Settlement** | Cash payment based on price difference at expiry |
 | **Collateral** | Funds locked to back the option (for sellers) |
 
+### Collateral Requirements by Option Type
+
+**IMPORTANT:** Different option types require different collateral tokens:
+
+| Option Type | Implementation | Collateral Required |
+|-------------|----------------|---------------------|
+| **PUT** | PUT | USDC (quote asset) |
+| **CALL** | INVERSE_CALL | WETH (base asset) |
+
+- **PUT options**: Collateral in USDC. Formula: `(collateral × 1e8) / strike`
+- **CALL options**: Collateral in WETH. Formula: `collateral / 1e12` (1 WETH = 1 contract)
+
+The `build-rfq.ts` script automatically selects the correct collateral based on option type.
+
 ---
 
 ## Orderbook vs RFQ: When to Use Each

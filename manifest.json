@@ -1,0 +1,36 @@
+{
+  "name": "thetanuts",
+  "version": "1.1.0",
+  "description": "Thetanuts OpenClaw Skill - Trade crypto options with integrated wallet management",
+  "homepage": "https://github.com/Thetanuts-Finance/thetanuts-openclaw",
+  "updateUrl": "https://raw.githubusercontent.com/Thetanuts-Finance/thetanuts-openclaw/main/scripts/update-from-manifest.sh",
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "manifest.json",
+    "scripts/onboard.sh",
+    "scripts/update.sh",
+    "scripts/wallet-discover.js",
+    "scripts/wallet-create.js",
+    "scripts/wallet-import.js",
+    "scripts/wallet-select.js",
+    "scripts/wallet-balance.js",
+    "scripts/create-wallet.ts",
+    "scripts/import-wallet.ts",
+    "scripts/get-balance.ts",
+    "scripts/sign-message.ts",
+    "scripts/send-transaction.ts",
+    "scripts/approve-token.ts",
+    "scripts/get-prices.ts",
+    "scripts/get-mm-pricing.ts",
+    "scripts/get-positions.ts",
+    "scripts/build-rfq.ts",
+    "scripts/fetch-orders.ts",
+    "scripts/calculate-payout.ts"
+  ],
+  "checksums": {
+    "SKILL.md": "pending",
+    "scripts/onboard.sh": "pending"
+  },
+  "lastUpdated": "2026-03-27T12:00:00.000Z"
+}

@@ -10,14 +10,113 @@ metadata: {"openclaw":{"emoji":"📈","install":[{"type":"node","package":"."}]}
 
 You help users trade crypto options on Thetanuts Finance using the Thetanuts SDK and manage their wallets using the Tether WDK.
 
-## Setup
+## Onboarding
 
-Before first use, install dependencies:
+For first-time setup, run the onboarding script:
 ```bash
-cd {baseDir} && npm install
+bash {baseDir}/scripts/onboard.sh
 ```
 
-## Wallet Management
+This will:
+- Check prerequisites (node, npm)
+- Create WDK MCP runtime at `~/.openclaw/wdk-mcp`
+- Install all required dependencies
+- Scaffold the MCP server
+
+Then create or import a wallet (see Wallet Management below).
+
+## Updates
+
+Check for and apply skill updates:
+```bash
+bash {baseDir}/scripts/update.sh
+```
+
+Optional flags:
+- `REFRESH_WDK_DEPS=1` - Refresh dependencies from lockfile
+- `UPGRADE_WDK_DEPS=1` - Upgrade dependency versions
+- `RESTART_WDK_RUNTIME=1` - Restart runtime process
+
+Note: Updates NEVER modify wallet secrets (`.env`, `WDK_SEED`).
+
+## Wallet Management (Enhanced)
+
+### Discover Wallet
+Check if a wallet is configured and show addresses:
+```bash
+node {baseDir}/scripts/wallet-discover.js
+```
+
+### Create Wallet
+Generate a new dedicated wallet:
+```bash
+node {baseDir}/scripts/wallet-create.js
+```
+
+**SECURITY**: Use a DEDICATED wallet for this integration. Never reuse your primary wallet seed.
+
+### Import Wallet
+Import an existing seed phrase:
+```bash
+# From file
+node {baseDir}/scripts/wallet-import.js --seed-file /path/to/seed.txt
+
+# From stdin
+printf '%s' "$WDK_SEED" | node {baseDir}/scripts/wallet-import.js --stdin
+```
+
+### Select Wallet Context
+Set active wallet family, chain, and index:
+```bash
+node {baseDir}/scripts/wallet-select.js --family evm --chain base-mainnet --index 0
+```
+
+Supported chains:
+| Chain Slug | Family | Symbol |
+|------------|--------|--------|
+| `ethereum-mainnet` | evm | ETH |
+| `base-mainnet` | evm | ETH |
+| `bnb-smart-chain` | evm | BNB |
+| `solana-mainnet` | solana | SOL |
+
+### Query Balance
+Get wallet balance for a specific chain:
+```bash
+# Native balance
+node {baseDir}/scripts/wallet-balance.js --chain base-mainnet --index 0
+
+# With token balance
+node {baseDir}/scripts/wallet-balance.js --chain base-mainnet --index 0 --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+```
+
+## Legacy Wallet Commands
+
+The following TypeScript-based commands are still available for backward compatibility:
+
+### Create New Wallet (Legacy)
+```bash
+npx tsx {baseDir}/scripts/create-wallet.ts --chain <evm|solana> [--index <number>]
+```
+
+### Import Existing Wallet (Legacy)
+```bash
+npx tsx {baseDir}/scripts/import-wallet.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>]
+```
+
+### Get Wallet Balance (Legacy)
+```bash
+npx tsx {baseDir}/scripts/get-balance.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>] [--token <address>]
+```
+
+### Sign Message
+```bash
+npx tsx {baseDir}/scripts/sign-message.ts --chain <evm|solana> --seed "<seed phrase>" --message "<message>" [--index <number>]
+```
+
+Common Base tokens:
+- USDC: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- WETH: `0x4200000000000000000000000000000000000006`
+- cbBTC: `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf`
 
 ### Create New Wallet
 ```bash
@@ -292,12 +391,14 @@ Examples:
 
 ## Security Notes
 
+- **DEDICATED WALLET**: Use a dedicated wallet seed for this integration. Never reuse your primary/personal wallet.
 - **SEED PHRASES**: Never log, store, or transmit seed phrases except when displaying to user during wallet creation
 - **TRANSACTIONS**: Transactions are IRREVERSIBLE once broadcast. Always verify destination and amount before sending.
 - **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts. Use `--max` carefully.
 - **SIGNING**: Always warn users before signing messages or transactions
 - **DISPOSAL**: Wallet scripts automatically clear keys from memory after use
 - **GAS**: Ensure wallet has ETH for gas fees on Base network
+- **UPDATES**: Skill updates never modify wallet secrets (`.env`, `WDK_SEED`)
 
 ## Network Configuration
 

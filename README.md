@@ -24,21 +24,50 @@ cd ~/.openclaw/workspace/skills
 git clone https://github.com/Thetanuts-Finance/thetanuts-openclaw.git thetanuts
 ```
 
-### Step 2: Install dependencies
+### Step 2: Run Onboarding
 
 ```bash
 cd ~/.openclaw/workspace/skills/thetanuts
-npm install
+bash scripts/onboard.sh
 ```
 
-### Step 3: Reload OpenClaw
+This will:
+- Check prerequisites (node, npm)
+- Create WDK MCP runtime at `~/.openclaw/wdk-mcp`
+- Install all required dependencies
+
+### Step 3: Create or Import Wallet
+
+```bash
+# Create new dedicated wallet
+node scripts/wallet-create.js
+
+# Or import existing seed
+node scripts/wallet-import.js --seed-file /path/to/seed.txt
+```
+
+**⚠️ IMPORTANT**: Use a DEDICATED wallet for this integration. Never reuse your primary wallet seed phrase.
+
+### Step 4: Reload OpenClaw
 
 Start a new session to load the skill:
 ```
 /new
 ```
 
-Or restart the gateway.
+## Updates
+
+Check for and apply skill updates:
+
+```bash
+bash scripts/update.sh
+```
+
+Optional flags:
+- `REFRESH_WDK_DEPS=1` - Refresh dependencies from lockfile
+- `UPGRADE_WDK_DEPS=1` - Upgrade dependency versions
+
+**Note**: Updates NEVER modify wallet secrets (`.env`, `WDK_SEED`).
 
 ## Usage
 
@@ -50,7 +79,70 @@ Once installed, you can ask questions like:
 - "I want to buy 0.1 ETH 2000 put expiring March 28"
 - "Check positions for 0x..."
 
-## Wallet Management Scripts
+## Wallet Management
+
+The skill uses a centralized wallet stored in `~/.openclaw/wdk-mcp/.env`. This enables deterministic wallet operations without passing seed phrases in commands.
+
+### Wallet Scripts
+
+| Script | Description |
+|--------|-------------|
+| `wallet-discover.js` | Check if wallet is configured, show addresses |
+| `wallet-create.js` | Generate new BIP-39 seed and configure |
+| `wallet-import.js` | Import existing seed from file or stdin |
+| `wallet-select.js` | Set active wallet context (family, chain, index) |
+| `wallet-balance.js` | Query balances with chain-specific RPC |
+
+### Discover Wallet
+
+```bash
+node scripts/wallet-discover.js
+```
+
+### Create Wallet
+
+```bash
+node scripts/wallet-create.js
+```
+
+### Import Wallet
+
+```bash
+# From file
+node scripts/wallet-import.js --seed-file /path/to/seed.txt
+
+# From stdin
+printf '%s' "$SEED" | node scripts/wallet-import.js --stdin
+```
+
+### Select Wallet Context
+
+```bash
+node scripts/wallet-select.js --family evm --chain base-mainnet --index 0
+```
+
+### Check Balance
+
+```bash
+# Native balance
+node scripts/wallet-balance.js --chain base-mainnet --index 0
+
+# With token balance
+node scripts/wallet-balance.js --chain base-mainnet --index 0 --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+```
+
+## Supported Chains
+
+| Chain Slug | Family | Symbol | Chain ID |
+|------------|--------|--------|----------|
+| `ethereum-mainnet` | evm | ETH | 1 |
+| `base-mainnet` | evm | ETH | 8453 |
+| `bnb-smart-chain` | evm | BNB | 56 |
+| `solana-mainnet` | solana | SOL | - |
+
+## Legacy Wallet Scripts
+
+The following TypeScript-based commands are available for backward compatibility:
 
 | Script | Description |
 |--------|-------------|
@@ -61,43 +153,11 @@ Once installed, you can ask questions like:
 | `approve-token.ts` | Approve ERC20 token spending |
 | `send-transaction.ts` | Sign and broadcast transactions |
 
-### Create New Wallet
-
-```bash
-npx tsx scripts/create-wallet.ts --chain evm
-npx tsx scripts/create-wallet.ts --chain solana
-```
-
-### Import Existing Wallet
-
-```bash
-npx tsx scripts/import-wallet.ts --chain evm --seed "word1 word2 ... word12"
-```
-
-### Check Balance
-
-```bash
-# Native balance
-npx tsx scripts/get-balance.ts --chain evm --seed "..."
-
-# With USDC token balance
-npx tsx scripts/get-balance.ts --chain evm --seed "..." --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-```
-
-### Sign Message
-
-```bash
-npx tsx scripts/sign-message.ts --chain evm --seed "..." --message "Hello"
-```
-
 ### Approve Token Spending
 
 ```bash
 # Approve max USDC for Thetanuts
 npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
-
-# Approve specific amount
-npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --amount 100 --seed "..." --wait
 ```
 
 ### Send Transaction
@@ -133,12 +193,12 @@ npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 
 
 1. **Create wallet** (or import existing):
    ```bash
-   npx tsx scripts/create-wallet.ts --chain evm
+   node scripts/wallet-create.js
    ```
 
 2. **Check balance**:
    ```bash
-   npx tsx scripts/get-balance.ts --chain evm --seed "your seed phrase"
+   node scripts/wallet-balance.js --chain base-mainnet --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
    ```
 
 3. **Approve USDC** for Thetanuts (one-time per token):

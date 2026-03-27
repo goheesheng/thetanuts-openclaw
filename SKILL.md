@@ -138,6 +138,96 @@ You → Submit RFQ → MM sees it → MM sends offer → You settle
 
 ---
 
+## Agent Decision Logic (Orderbook-First)
+
+When a user wants to trade, the agent ALWAYS checks the orderbook first before recommending a trading method.
+
+### Decision Flowchart
+
+```
+User wants to trade
+        │
+        ▼
+┌─────────────────────────┐
+│  check-orderbook.ts     │
+│  Check for liquidity    │
+└─────────────────────────┘
+        │
+        ▼
+┌─────────────────────────┐
+│ Exact strike match?     │
+└─────────────────────────┘
+    │           │
+   Yes          No
+    │           │
+    ▼           ▼
+┌─────────┐  ┌─────────────────┐
+│Orderbook│  │Nearby strikes?  │
+│  Fill   │  │(within ±5%)     │
+└─────────┘  └─────────────────┘
+                 │         │
+                Yes        No
+                 │         │
+                 ▼         ▼
+           ┌─────────┐  ┌─────┐
+           │Show     │  │ RFQ │
+           │options  │  │     │
+           └─────────┘  └─────┘
+```
+
+### How to Use check-orderbook.ts
+
+Before recommending orderbook or RFQ, run:
+```bash
+npx tsx scripts/check-orderbook.ts --underlying ETH --type PUT --strike 1900 --expiry 1774684800 --direction sell
+```
+
+The script returns:
+- `recommendation`: "orderbook" or "rfq"
+- `reason`: Explanation of why
+- `orderbookOrders`: Matching orders with prices
+- `nearbyStrikes`: Alternative strikes if exact not found
+- `nextStep`: Command to run next
+
+### Example Scenarios
+
+**Scenario 1: Liquidity Found**
+```
+User: "Sell a PUT at $1900"
+Agent: Runs check-orderbook.ts
+Result: {
+  "recommendation": "orderbook",
+  "reason": "Found orderbook liquidity at strike $1900. Best bid: $8.08. Available: 75 contracts."
+}
+Agent: "Found a buyer at $8.08/contract. Use orderbook for instant execution."
+```
+
+**Scenario 2: No Exact Match, Nearby Available**
+```
+User: "Sell a PUT at $1850"
+Agent: Runs check-orderbook.ts
+Result: {
+  "recommendation": "rfq",
+  "reason": "No orderbook liquidity at $1850. Nearby strikes: $1900 (+2.7%), $1925 (+4.1%)"
+}
+Agent: "No orders at $1850, but $1900 is available (+2.7%). Would you like that, or submit RFQ for $1850?"
+```
+
+**Scenario 3: Partial Fill**
+```
+User: "Sell 100 contracts at $1900"
+Agent: Runs check-orderbook.ts --size 100
+Result: {
+  "recommendation": "orderbook",
+  "partialFillAvailable": true,
+  "partialSize": 75,
+  "reason": "Found 75 contracts (you requested 100). Partial fill available."
+}
+Agent: "Only 75 contracts available on orderbook. Fill partial now, or use RFQ for full 100?"
+```
+
+---
+
 ## Trading Workflows
 
 ### Workflow 1: Fill an Orderbook Order (Instant)
@@ -250,6 +340,7 @@ Agent: No orderbook liquidity at $1900. I'll submit an RFQ.
 | `npx tsx scripts/get-prices.ts` | Get BTC/ETH prices |
 | `npx tsx scripts/get-mm-pricing.ts ETH --type PUT` | Get MM option quotes |
 | `npx tsx scripts/fetch-orders.ts --type PUT` | Fetch orderbook |
+| `npx tsx scripts/check-orderbook.ts --underlying ETH --type PUT --strike 1900 --expiry <ts> --direction sell` | Check orderbook liquidity (run FIRST before trading) |
 
 ### Trading Commands
 

@@ -113,7 +113,7 @@ async function main() {
       numContracts: params.contracts,
       isLong: params.direction === 'buy',
       collateralToken: params.collateral || 'USDC',
-      offerDeadlineMinutes: params.deadlineMinutes || 60,
+      offerDeadlineMinutes: params.deadlineMinutes || 6,  // 6 min default for faster MM response
     });
 
     // Encode the transaction (synchronous)

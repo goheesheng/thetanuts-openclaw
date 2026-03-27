@@ -8,466 +8,353 @@ metadata: {"openclaw":{"emoji":"📈","install":[{"type":"node","package":"."}]}
 
 # Thetanuts Options Trading
 
-You help users trade crypto options on Thetanuts Finance using the `@thetanuts-finance/thetanuts-client` SDK and manage their wallets using the Tether WDK.
+## What is TNUT Agent?
 
-## SDK Overview
+TNUT Agent is your AI-powered assistant for trading crypto options on Thetanuts Finance.
 
-The Thetanuts SDK provides complete options trading functionality:
+**What it does:**
+- Manages local wallets safely (custody stays on your machine)
+- Accesses market intelligence (prices, orderbook, MM quotes)
+- Inspects options and positions
+- Prepares and executes trades through the Thetanuts protocol
 
-| Module | Purpose | Requires Signer |
-|--------|---------|-----------------|
-| `client.api` | Fetch orders, positions, market data | No |
-| `client.optionBook` | Fill/cancel orders, fee queries | Write ops |
-| `client.optionFactory` | RFQ lifecycle management | Write ops |
-| `client.option` | Position management, payouts | Write ops |
-| `client.erc20` | Token approvals, balances | Write ops |
-| `client.ws` | Real-time WebSocket subscriptions | No |
-| `client.pricing` | Option pricing, Greeks | No |
-| `client.mmPricing` | MM pricing quotes | No |
-| `client.utils` | Decimal conversions, payoff calculations | No |
+**Local-first design:**
+- Wallet custody stays LOCAL - your seed phrase never leaves your machine
+- Signing stays LOCAL - transactions are signed on your device
+- Backend provides intelligence, data, and routing support only
+
+**Capabilities:**
+| Category | What You Can Do |
+|----------|----------------|
+| Wallet | Create, import, check balances |
+| Market Data | Live prices, MM quotes, orderbook orders |
+| Trading | Fill orderbook orders, submit RFQs, approve tokens |
+| Positions | View open positions, calculate payoffs |
+
+---
+
+## Options 101
+
+### What are Options?
+
+Options are contracts that give you the right (but not obligation) to buy or sell an asset at a specific price by a specific date.
+
+### PUT Options
+
+A **PUT** gives the holder the right to SELL at the strike price.
+
+| Action | You... | Profit When | Risk |
+|--------|--------|-------------|------|
+| **Buy PUT** | Pay premium upfront | Price drops below strike | Lose premium if price stays up |
+| **Sell PUT** | Receive premium | Price stays above strike | Lose if price drops below strike |
+
+**Example:**
+- ETH is at $2000
+- You BUY a $1900 PUT for $10 premium
+- If ETH drops to $1800 → Your PUT is worth $100 (profit: $90)
+- If ETH stays at $2000 → Your PUT expires worthless (loss: $10 premium)
+
+### CALL Options
+
+A **CALL** gives the holder the right to BUY at the strike price.
+
+| Action | You... | Profit When | Risk |
+|--------|--------|-------------|------|
+| **Buy CALL** | Pay premium upfront | Price rises above strike | Lose premium if price stays down |
+| **Sell CALL** | Receive premium | Price stays below strike | Lose if price rises above strike |
+
+**Example:**
+- ETH is at $2000
+- You BUY a $2100 CALL for $15 premium
+- If ETH rises to $2300 → Your CALL is worth $200 (profit: $185)
+- If ETH stays at $2000 → Your CALL expires worthless (loss: $15 premium)
+
+### Key Terms
+
+| Term | Definition |
+|------|------------|
+| **Strike** | The price at which the option can be exercised |
+| **Expiry** | When the option expires (settlement date, 8:00 UTC) |
+| **Premium** | The price paid for the option |
+| **Settlement** | Cash payment based on price difference at expiry |
+| **Collateral** | Funds locked to back the option (for sellers) |
+
+---
+
+## Orderbook vs RFQ: When to Use Each
+
+### Orderbook Trading
+
+**What it is:** Fill existing orders posted by market makers - instant execution.
+
+```
+You → Fill existing order → Instant trade
+```
+
+**Best for:**
+- Standard strikes/expiries with existing liquidity
+- Quick trades when you see a good price
+- Smaller to medium sizes
+
+**How it works:**
+1. Fetch orderbook: `npx tsx scripts/fetch-orders.ts --type PUT`
+2. See available BIDs (buyers) and ASKs (sellers)
+3. Fill the order you want: `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute`
+
+### RFQ (Request for Quote)
+
+**What it is:** Request a custom quote from market makers - they respond within 6 minutes.
+
+```
+You → Submit RFQ → MM sees it → MM sends offer → You settle
+```
+
+**Best for:**
+- Custom strikes/expiries not on orderbook
+- No existing liquidity at your terms
+- Larger sizes (MMs may offer better pricing)
+
+**How it works:**
+1. Build RFQ: `npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry <timestamp> --contracts 0.1 --direction buy`
+2. Send transaction with the returned `to` and `data`
+3. Wait up to 6 minutes for MM response
+4. Settle when offer received
+
+### Decision Matrix
+
+| Scenario | Use | Why |
+|----------|-----|-----|
+| "I see a good price on orderbook" | **Orderbook** | Instant execution |
+| "Standard strike, liquidity exists" | **Orderbook** | Faster, simpler |
+| "Custom strike not on orderbook" | **RFQ** | Only way to get it |
+| "Large size trade" | **RFQ** | May get better pricing |
+| "Need it filled NOW" | **Orderbook** | RFQ takes up to 6 min |
+| "No orders at my strike" | **RFQ** | Request custom quote |
+
+**Agent Decision Logic:**
+1. First, check orderbook for liquidity at your strike
+2. If liquidity exists → recommend Orderbook
+3. If no liquidity → recommend RFQ and explain why
+
+---
+
+## Trading Workflows
+
+### Workflow 1: Fill an Orderbook Order (Instant)
+
+```
+Step 1: Check wallet
+   └─> node scripts/wallet-discover.js
+
+Step 2: Check balance
+   └─> node scripts/wallet-balance.js --chain base-mainnet --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+
+Step 3: Fetch orderbook
+   └─> npx tsx scripts/fetch-orders.ts --type PUT
+
+Step 4: Preview fill (see what you'll get)
+   └─> npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..."
+
+Step 5: Execute fill
+   └─> npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute --wait
+```
+
+### Workflow 2: Submit an RFQ (Custom Terms)
+
+```
+Step 1: Check wallet & balance (same as above)
+
+Step 2: Get MM pricing to see market levels
+   └─> npx tsx scripts/get-mm-pricing.ts ETH --type PUT
+
+Step 3: Build RFQ with your terms
+   └─> npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry 1774684800 --contracts 0.1 --direction buy
+
+Step 4: Approve tokens (if selling/first time)
+   └─> npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+
+Step 5: Send RFQ transaction
+   └─> npx tsx scripts/send-transaction.ts --to <from step 3> --data <from step 3> --seed "..." --wait
+
+Step 6: Wait for MM offer (up to 6 minutes)
+```
+
+### Workflow 3: Check Positions
+
+```
+npx tsx scripts/get-positions.ts 0xYourWalletAddress
+```
+
+---
+
+## Example Conversations
+
+### "Show me ETH puts"
+
+**User:** Show me ETH puts
+
+**Agent:**
+1. Fetches MM pricing: `npx tsx scripts/get-mm-pricing.ts ETH --type PUT`
+2. Shows available strikes, expiries, bid/ask prices
+3. Asks which one interests you
+
+### "I want to sell a put at $1900 with 10 USDC"
+
+**Agent's Decision Process:**
+1. Check orderbook for $1900 PUT bids
+2. Found liquidity? → "Use Orderbook - there's a BID at $1900"
+3. No liquidity? → "Use RFQ - I'll request a quote for you"
+
+**If Orderbook:**
+```
+Agent: There's a BID at $1900. Let me fill it for you.
+1. Previews: "You'll sell ~0.005 contracts, receive ~$X premium"
+2. Asks: "Proceed?"
+3. Executes fill
+```
+
+**If RFQ:**
+```
+Agent: No orderbook liquidity at $1900. I'll submit an RFQ.
+1. Builds RFQ for ETH-1900-PUT sell
+2. Approves USDC if needed
+3. Submits RFQ
+4. "RFQ submitted. MMs have 6 minutes to respond."
+```
+
+### "Check my positions"
+
+**Agent:**
+1. Gets wallet address from discover
+2. Runs: `npx tsx scripts/get-positions.ts 0xYourAddress`
+3. Shows open positions with current P&L
+
+---
+
+## Commands Reference
+
+### Wallet Commands
+
+| Command | Description |
+|---------|-------------|
+| `node scripts/wallet-discover.js` | Check if wallet configured, show addresses |
+| `node scripts/wallet-create.js` | Generate new wallet |
+| `node scripts/wallet-import.js --seed-file /path` | Import existing seed |
+| `node scripts/wallet-balance.js --chain base-mainnet` | Check balance |
+| `node scripts/wallet-select.js --family evm --chain base-mainnet` | Set active chain |
+
+### Market Data Commands
+
+| Command | Description |
+|---------|-------------|
+| `npx tsx scripts/get-prices.ts` | Get BTC/ETH prices |
+| `npx tsx scripts/get-mm-pricing.ts ETH --type PUT` | Get MM option quotes |
+| `npx tsx scripts/fetch-orders.ts --type PUT` | Fetch orderbook |
+
+### Trading Commands
+
+| Command | Description |
+|---------|-------------|
+| `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute` | Fill orderbook order |
+| `npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry <ts> --contracts 0.1 --direction buy` | Build RFQ |
+| `npx tsx scripts/approve-token.ts --token <addr> --spender <addr> --max --seed "..."` | Approve tokens |
+| `npx tsx scripts/send-transaction.ts --to <addr> --data <hex> --seed "..."` | Send transaction |
+
+### Position Commands
+
+| Command | Description |
+|---------|-------------|
+| `npx tsx scripts/get-positions.ts <address>` | Get open positions |
+| `npx tsx scripts/calculate-payout.ts --type PUT --strike 1900 --settlement 1800 --contracts 1` | Calculate payoff |
+
+---
+
+## Contract Addresses (Base Mainnet)
+
+### Core Contracts
+
+| Contract | Address |
+|----------|---------|
+| **OptionBook** | `0xd58b814C7Ce700f251722b5555e25aE0fa8169A1` |
+| **OptionFactory** | `0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5` |
+
+### Tokens
+
+| Token | Address | Decimals |
+|-------|---------|----------|
+| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` | 6 |
+| WETH | `0x4200000000000000000000000000000000000006` | 18 |
+| cbBTC | `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf` | 8 |
+| cbDOGE | `0x73c7A9C372F31c1b1C7f8E5A7D12B8735c817C79` | 8 |
+| cbXRP | `0x7B2Cd9EA5566c345C9cdbcF58f5E211a0dB47444` | 6 |
+| aBasWETH | `0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7` | 18 |
+| aBascbBTC | `0xBdb9300b7CDE636d9cD4AFF00f6F009fFBBc8EE6` | 8 |
+| aBasUSDC | `0x4e65fE4DbA92790696d040ac24Aa414708F5c0AB` | 6 |
+
+### Option Implementations
+
+| Type | Address |
+|------|---------|
+| PUT | `0xF480F636301d50Ed570D026254dC5728b746A90F` |
+| INVERSE_CALL | `0x3CeB524cBA83D2D4579F5a9F8C0D1f5701dd16FE` |
+| CALL_SPREAD | `0x4D75654bC616F64F6010d512C3B277891FB52540` |
+| PUT_SPREAD | `0xC9767F9a2f1eADC7Fdcb7f0057E829D9d760E086` |
+| CALL_FLY | `0xD8EA785ab2A63a8a94C38f42932a54A3E45501c3` |
+| PUT_FLY | `0x1fE24872Ab7c83BbA26Dc761ce2EA735c9b96175` |
+| CALL_CONDOR | `0xbb5d2EB2D354D930899DaBad01e032C76CC3c28f` |
+| PUT_CONDOR | `0xbdAcC00Dc3F6e1928D9380c17684344e947aa3Ec` |
+| IRON_CONDOR | `0x494Cd61b866D076c45564e236D6Cb9e011a72978` |
+| PHYSICAL_CALL | `0x07032ffb1df85eC006Be7c76249B9e6f39b60F32` |
+| PHYSICAL_PUT | `0xAC5eCA7129909dE8c12e1a41102414B5a5f340AA` |
+
+### Price Feeds (Chainlink)
+
+| Asset | Address |
+|-------|---------|
+| ETH/USD | `0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70` |
+| BTC/USD | `0x64c911996D3c6aC71f9b455B1E8E7266BcbD848F` |
+| SOL | `0x975043adBb80fc32276CbF9Bbcfd4A601a12462D` |
+| DOGE | `0x8422f3d3CAFf15Ca682939310d6A5e619AE08e57` |
+| XRP | `0x9f0C1dD78C4CBdF5b9cf923a549A201EdC676D34` |
+
+---
 
 ## Onboarding
 
-For first-time setup, run the onboarding script:
+For first-time setup:
 ```bash
 bash {baseDir}/scripts/onboard.sh
 ```
 
-This will:
-- Check prerequisites (node, npm)
-- Create WDK MCP runtime at `~/.openclaw/wdk-mcp`
-- Install all required dependencies
-
-Then create or import a wallet (see Wallet Management below).
+Then create or import a wallet:
+```bash
+node {baseDir}/scripts/wallet-create.js
+# or
+node {baseDir}/scripts/wallet-import.js --seed-file /path/to/seed.txt
+```
 
 ## Updates
 
-Check for and apply skill updates:
 ```bash
 bash {baseDir}/scripts/update.sh
 ```
 
 Optional flags:
-- `REFRESH_WDK_DEPS=1` - Refresh dependencies from lockfile
-- `UPGRADE_WDK_DEPS=1` - Upgrade dependency versions
+- `REFRESH_WDK_DEPS=1` - Refresh dependencies
+- `UPGRADE_WDK_DEPS=1` - Upgrade versions
 
-Note: Updates NEVER modify wallet secrets (`.env`, `WDK_SEED`).
+---
 
-## Wallet Management
+## Security Notes
 
-### Discover Wallet
-Check if a wallet is configured and show addresses:
-```bash
-node {baseDir}/scripts/wallet-discover.js
-```
+- **DEDICATED WALLET**: Use a dedicated wallet seed for this integration. Never reuse your primary wallet.
+- **LOCAL CUSTODY**: Your seed phrase stays on your machine. The agent never sends it anywhere.
+- **TRANSACTIONS**: Irreversible once broadcast. Always verify before sending.
+- **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts.
+- **RFQ DEADLINE**: MMs have 6 minutes to respond to RFQs.
+- **GAS**: Ensure wallet has ETH on Base for gas fees.
 
-### Create Wallet
-Generate a new dedicated wallet:
-```bash
-node {baseDir}/scripts/wallet-create.js
-```
-
-**SECURITY**: Use a DEDICATED wallet for this integration. Never reuse your primary wallet seed.
-
-### Import Wallet
-Import an existing seed phrase:
-```bash
-# From file
-node {baseDir}/scripts/wallet-import.js --seed-file /path/to/seed.txt
-
-# From stdin
-printf '%s' "$WDK_SEED" | node {baseDir}/scripts/wallet-import.js --stdin
-```
-
-### Select Wallet Context
-Set active wallet family, chain, and index:
-```bash
-node {baseDir}/scripts/wallet-select.js --family evm --chain base-mainnet --index 0
-```
-
-### Query Balance
-Get wallet balance for a specific chain:
-```bash
-# Native balance
-node {baseDir}/scripts/wallet-balance.js --chain base-mainnet --index 0
-
-# With token balance
-node {baseDir}/scripts/wallet-balance.js --chain base-mainnet --index 0 --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-```
-
-## Orderbook Trading
-
-### Fetch Orders
-Get all available orders from the orderbook:
-```bash
-npx tsx {baseDir}/scripts/fetch-orders.ts [--underlying ETH|BTC] [--type PUT|CALL]
-```
-
-Example:
-```bash
-npx tsx {baseDir}/scripts/fetch-orders.ts --underlying ETH --type PUT
-```
-
-### Preview Fill Order
-Before filling, preview the order to see max contracts and pricing:
-```typescript
-const preview = client.optionBook.previewFillOrder(order, collateralAmount);
-// Returns: maxContracts, collateralToken, pricePerContract, numContracts
-```
-
-### Fill Order
-Fill an order from the orderbook:
-```bash
-npx tsx {baseDir}/scripts/fill-order.ts --order-id <id> --collateral <amount> --seed "..."
-```
-
-**Important**: The `availableAmount` in orders represents maker's collateral budget, not contract count. Use `previewFillOrder()` to calculate actual contracts.
-
-| Option Type | Contract Formula |
-|-------------|------------------|
-| Vanilla PUT | `(collateral × 1e8) / strike` |
-| Inverse CALL | `collateral / 1e12` |
-| Spread | `(collateral × 1e8) / width` |
-| Butterfly | `(collateral × 1e8) / maxSpread` |
-| Condor | `(collateral × 1e8) / maxSpread` |
-
-## RFQ (Request for Quote)
-
-### Get MM Pricing
-Get market maker pricing for options:
-```bash
-npx tsx {baseDir}/scripts/get-mm-pricing.ts <underlying> [--type PUT|CALL] [--expiry DDMMMYY]
-```
-
-Examples:
-```bash
-npx tsx {baseDir}/scripts/get-mm-pricing.ts ETH
-npx tsx {baseDir}/scripts/get-mm-pricing.ts ETH --type PUT
-npx tsx {baseDir}/scripts/get-mm-pricing.ts BTC --expiry 28MAR26
-```
-
-### Build RFQ Request
-Build an RFQ transaction for vanilla options:
-```bash
-npx tsx {baseDir}/scripts/build-rfq.ts --underlying <ETH|BTC> --type <PUT|CALL> --strike <price> --expiry <timestamp> --contracts <amount> --direction <buy|sell> [--collateral USDC|WETH] [--deadline <minutes>]
-```
-
-Arguments:
-- `--underlying` (required): ETH or BTC
-- `--type` (required): PUT or CALL
-- `--strike` (required): Strike price in USD (e.g., 2500)
-- `--expiry` (required): Unix timestamp of expiry (8:00 UTC)
-- `--contracts` (required): Number of contracts (human-readable, e.g., 1.5)
-- `--direction` (required): buy or sell
-- `--collateral` (optional): USDC or WETH (default: USDC)
-- `--deadline` (optional): Offer deadline in minutes (default: 60)
-- `--reserve-price` (optional): Reserve price per contract
-
-Example:
-```bash
-npx tsx {baseDir}/scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
-```
-
-**CRITICAL RFQ RULE**: The `collateralAmount` parameter in RFQs must always be 0. Collateral is pulled at settlement, not during RFQ creation. The SDK enforces this automatically.
-
-### Multi-Strike Structures (Advanced)
-The SDK supports complex option structures for cash-settled options:
-
-| Structure | Strikes | Example |
-|-----------|---------|---------|
-| Vanilla | 1 | PUT, INVERSE_CALL |
-| Spread | 2 | PUT_SPREAD, CALL_SPREAD |
-| Butterfly | 3 | PUT_FLY, CALL_FLY |
-| Condor | 4 | PUT_CONDOR, CALL_CONDOR |
-
-**Butterfly (3 strikes):**
-```typescript
-const butterflyRequest = client.optionFactory.buildRFQRequest({
-  underlying: 'ETH',
-  optionType: 'PUT',
-  strikes: [1700, 1800, 1900],  // 3 strikes
-  numContracts: 0.001,
-  isLong: false,
-  // ... other params
-});
-```
-
-**Condor (4 strikes):**
-```typescript
-const condorRequest = client.optionFactory.buildRFQRequest({
-  underlying: 'ETH',
-  optionType: 'PUT',
-  strikes: [1600, 1700, 1800, 1900],  // 4 strikes
-  numContracts: 0.001,
-  isLong: false,
-  // ... other params
-});
-```
-
-### RFQ Key Management
-The SDK automatically manages ECDH key pairs for encrypted RFQ offers:
-- **Node.js**: Keys saved to `.thetanuts-keys/` directory
-- **Browser**: Keys saved to localStorage
-
-```typescript
-const keyPair = await client.rfqKeys.getOrCreateKeyPair();
-```
-
-### Settle RFQ Early
-```typescript
-const decrypted = await client.rfqKeys.decryptOffer(
-  offer.signedOfferForRequester,
-  offer.signingKey
-);
-
-const { to, data } = client.optionFactory.encodeSettleQuotationEarly(
-  quotationId,
-  decrypted.offerAmount,
-  decrypted.nonce,
-  offer.offeror
-);
-```
-
-## Transaction Execution
-
-### Approve Token Spending
-Before trading, approve tokens for Thetanuts contracts:
-```bash
-npx tsx {baseDir}/scripts/approve-token.ts --token <address> --spender <address> (--amount <number> | --max) --seed "..." [--wait]
-```
-
-Common addresses:
-| Contract | Address |
-|----------|---------|
-| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| WETH | `0x4200000000000000000000000000000000000006` |
-| cbBTC | `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf` |
-| OptionBook | `0x...` (from chainConfig) |
-| OptionFactory | `0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5` |
-
-Examples:
-```bash
-# Approve max USDC for OptionBook
-npx tsx {baseDir}/scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
-
-# Approve specific amount (100 USDC)
-npx tsx {baseDir}/scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --amount 100 --seed "..." --wait
-```
-
-### Send Transaction
-Sign and broadcast a transaction:
-```bash
-npx tsx {baseDir}/scripts/send-transaction.ts --to <address> --data <hex> --seed "..." [--value <wei>] [--wait]
-```
-
-Example:
-```bash
-npx tsx {baseDir}/scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "..." --wait
-```
-
-## Position Management
-
-### Get User Positions
-```bash
-npx tsx {baseDir}/scripts/get-positions.ts <wallet_address>
-```
-
-Example:
-```bash
-npx tsx {baseDir}/scripts/get-positions.ts 0x1234567890abcdef1234567890abcdef12345678
-```
-
-### Calculate Payout
-```bash
-npx tsx {baseDir}/scripts/calculate-payout.ts --type <PUT|CALL> --strike <price> --settlement <price> --contracts <amount> [--is-buyer]
-```
-
-Example:
-```bash
-npx tsx {baseDir}/scripts/calculate-payout.ts --type PUT --strike 2500 --settlement 2200 --contracts 1 --is-buyer
-```
-
-### Payoff Calculation (SDK)
-```typescript
-const payoff = client.utils.calculatePayout({
-  structure: 'call_spread',
-  strikes: [100000n, 105000n],
-  size: 1000000n,
-  price: 102000n,
-  isLong: true,
-});
-```
-
-## Real-time WebSocket
-
-Subscribe to real-time updates:
-
-```typescript
-await client.ws.connect();
-
-// Subscribe to orders
-client.ws.subscribe({ type: 'orders' }, (update) => {
-  console.log('Order update:', update);
-});
-
-// Subscribe to prices
-client.ws.subscribe({ type: 'prices' }, (update) => {
-  console.log('Price update:', update);
-}, 'ETH');
-
-// Monitor connection state
-client.ws.onStateChange((state) => {
-  console.log('WebSocket state:', state);
-});
-```
-
-## Market Data
-
-### Get Market Prices
-```bash
-npx tsx {baseDir}/scripts/get-prices.ts
-```
-
-Returns current BTC, ETH prices and protocol stats.
-
-### Get Market Data (SDK)
-```typescript
-const marketData = await client.api.getMarketData();
-const pricing = await client.mmPricing.getAllPricing('ETH');
-```
-
-## Decimal Handling
-
-The SDK provides utilities for converting between human-readable and on-chain values:
-
-| Asset Type | Decimals | Example |
-|-----------|----------|---------|
-| USDC | 6 | `1000000` = 1 USDC |
-| WETH | 18 | `1e18` = 1 WETH |
-| cbBTC | 8 | `1e8` = 1 cbBTC |
-| Strike Price | 8 | `185000000000` = $1850 |
-
-```typescript
-// To on-chain values
-const usdc = client.utils.toBigInt('100.5', 6);      // 100500000n
-const strike = client.utils.strikeToChain(1850);     // 185000000000n
-
-// From on-chain values
-const display = client.utils.fromBigInt(100500000n, 6);  // '100.5'
-const price = client.utils.strikeFromChain(185000000000n); // 1850
-```
-
-## Referrer & Fee Sharing
-
-Set a referrer address to earn fee-sharing revenue:
-
-```typescript
-const client = new ThetanutsClient({
-  chainId: 8453,
-  provider,
-  signer,
-  referrer: '0x92b8ac05b63472d1D84b32bDFBBf3e1887331567',
-});
-
-// All fills automatically use this referrer
-await client.optionBook.fillOrder(order);
-
-// Or override per-fill
-await client.optionBook.fillOrder(order, undefined, '0xYourReferrerAddress');
-```
-
-## Error Handling
-
-The SDK throws typed errors:
-
-| Error Code | Description |
-|------------|-------------|
-| `ORDER_EXPIRED` | Order has expired |
-| `SLIPPAGE_EXCEEDED` | Price moved beyond tolerance |
-| `INSUFFICIENT_ALLOWANCE` | Token approval needed |
-| `INSUFFICIENT_BALANCE` | Insufficient token balance |
-| `SIGNER_REQUIRED` | Signer needed for operation |
-| `CONTRACT_REVERT` | Smart contract call reverted |
-| `SIZE_EXCEEDED` | Fill size exceeds available |
-
-```typescript
-import { isThetanutsError } from '@thetanuts-finance/thetanuts-client';
-
-try {
-  await client.optionBook.fillOrder(order);
-} catch (error) {
-  if (isThetanutsError(error)) {
-    switch (error.code) {
-      case 'ORDER_EXPIRED':
-        // Refresh orders
-        break;
-      case 'INSUFFICIENT_ALLOWANCE':
-        // Approve tokens
-        break;
-    }
-  }
-}
-```
-
-## Common Workflows
-
-### Workflow 1: Browse and Fill Orderbook
-
-1. **Discover wallet**:
-   ```bash
-   node {baseDir}/scripts/wallet-discover.js
-   ```
-
-2. **Check balance**:
-   ```bash
-   node {baseDir}/scripts/wallet-balance.js --chain base-mainnet --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
-   ```
-
-3. **Fetch available orders**:
-   ```bash
-   npx tsx {baseDir}/scripts/fetch-orders.ts --underlying ETH --type PUT
-   ```
-
-4. **Approve collateral** (one-time):
-   ```bash
-   npx tsx {baseDir}/scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender <optionBook> --max --seed "..." --wait
-   ```
-
-5. **Fill the order**:
-   ```bash
-   npx tsx {baseDir}/scripts/fill-order.ts --order-id <id> --collateral 10000000 --seed "..." --wait
-   ```
-
-### Workflow 2: Create RFQ for Custom Terms
-
-1. **Get MM pricing** to see available quotes:
-   ```bash
-   npx tsx {baseDir}/scripts/get-mm-pricing.ts ETH --type PUT
-   ```
-
-2. **Build RFQ** with your terms:
-   ```bash
-   npx tsx {baseDir}/scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
-   ```
-
-3. **Send transaction** using the `to` and `data` from step 2:
-   ```bash
-   npx tsx {baseDir}/scripts/send-transaction.ts --to 0x... --data 0x... --seed "..." --wait
-   ```
-
-4. **Wait for MM offer** and settle
-
-### Workflow 3: Check and Manage Positions
-
-1. **Get positions**:
-   ```bash
-   npx tsx {baseDir}/scripts/get-positions.ts 0xYourAddress
-   ```
-
-2. **Calculate potential payouts**:
-   ```bash
-   npx tsx {baseDir}/scripts/calculate-payout.ts --type PUT --strike 2500 --settlement 2200 --contracts 1 --is-buyer
-   ```
+---
 
 ## Ticker Format
 
@@ -477,56 +364,11 @@ Examples:
 - `ETH-28MAR26-2500-P` = ETH Put, $2500 strike, March 28 2026 expiry
 - `BTC-28MAR26-95000-C` = BTC Call, $95000 strike, March 28 2026 expiry
 
-## Supported Chains
+---
 
-| Chain | Chain ID | Family |
-|-------|----------|--------|
-| Base Mainnet | 8453 | evm |
-| Ethereum Mainnet | 1 | evm (wallet only) |
-| BNB Smart Chain | 56 | evm (wallet only) |
-| Solana Mainnet | - | solana (wallet only) |
-
-**Note**: Thetanuts V4 trading is only available on Base Mainnet.
-
-## Contract Addresses (Base)
-
-| Contract | Address |
-|----------|---------|
-| USDC | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
-| WETH | `0x4200000000000000000000000000000000000006` |
-| cbBTC | `0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf` |
-| OptionFactory | `0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5` |
-
-Access via SDK:
-```typescript
-const config = client.chainConfig;
-config.tokens.USDC.address;
-config.contracts.optionBook;
-config.implementations.PUT;
-config.priceFeeds.ETH;
-```
-
-## Security Notes
-
-- **DEDICATED WALLET**: Use a dedicated wallet seed for this integration. Never reuse your primary/personal wallet.
-- **SEED PHRASES**: Never log, store, or transmit seed phrases except when displaying to user during wallet creation
-- **TRANSACTIONS**: Transactions are IRREVERSIBLE once broadcast. Always verify destination and amount.
-- **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts.
-- **ORDER EXPIRY**: Always verify `order.expiry` before filling to avoid wasted gas.
-- **PREVIEW FIRST**: Use `previewFillOrder()` before filling to verify expected outcome.
-- **GAS**: Ensure wallet has ETH for gas fees on Base network
-- **UPDATES**: Skill updates never modify wallet secrets (`.env`, `WDK_SEED`)
-
-## Network Configuration
+## Network
 
 - **Chain**: Base Mainnet (Chain ID 8453)
-- **RPC**: Use dedicated RPC providers (Alchemy, Infura) for production
 - **Collateral**: USDC (6 decimals), WETH (18 decimals), cbBTC (8 decimals)
 - **Strikes**: 8 decimals internally
-- **Expiry**: Use 8:00 UTC on expiry date for MM acceptance
-
-## Compatibility
-
-- Node.js >= 18
-- ethers.js v6
-- TypeScript >= 5.0
+- **Expiry**: 8:00 UTC on expiry date

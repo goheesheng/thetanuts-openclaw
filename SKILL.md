@@ -95,6 +95,102 @@ The `build-rfq.ts` script automatically selects the correct collateral based on 
 
 ---
 
+## Multi-Strike Option Structures
+
+Beyond vanilla PUT and CALL options, Thetanuts supports advanced multi-strike structures for sophisticated trading strategies.
+
+### All Option Types
+
+| Type | Strikes | Collateral | Description |
+|------|---------|------------|-------------|
+| **PUT** | 1 | USDC | Standard cash-settled put |
+| **INVERSE_CALL** | 1 | WETH | Cash-settled call (base collateral) |
+| **CALL_SPREAD** | 2 | USDC | Buy lower strike call, sell higher strike call |
+| **PUT_SPREAD** | 2 | USDC | Buy higher strike put, sell lower strike put |
+| **CALL_FLY** | 3 | USDC | Call butterfly - profit near middle strike |
+| **PUT_FLY** | 3 | USDC | Put butterfly - profit near middle strike |
+| **CALL_CONDOR** | 4 | USDC | Call condor - wider profit range |
+| **PUT_CONDOR** | 4 | USDC | Put condor - wider profit range |
+| **IRON_CONDOR** | 4 | USDC | Put spread + call spread (neutral) |
+| **PHYSICAL_CALL** | 1 | WETH | Physically settled call |
+| **PHYSICAL_PUT** | 1 | USDC | Physically settled put |
+
+### Strike Ordering Rules
+
+**CRITICAL:** Strikes must be ordered correctly or the RFQ will fail.
+
+| Structure | Type | Strike Order | Example |
+|-----------|------|--------------|---------|
+| Vanilla | PUT/CALL | N/A (1 strike) | `--strike 1900` |
+| Spread | PUT | Descending (high→low) | `--strikes 1900,1800` |
+| Spread | CALL | Ascending (low→high) | `--strikes 2000,2100` |
+| Butterfly | PUT | Descending | `--strikes 1900,1850,1800` |
+| Butterfly | CALL | Ascending | `--strikes 2000,2050,2100` |
+| Condor | ALL | Always ascending | `--strikes 1800,1900,2100,2200` |
+
+### Collateral Formulas by Structure
+
+| Structure | Formula | Example |
+|-----------|---------|---------|
+| **Vanilla PUT** | `(collateral × 1e8) / strike` | 1900 USDC at $1900 = 1 contract |
+| **INVERSE_CALL** | `collateral / 1e12` | 1 WETH = 1 contract |
+| **Spread** | `collateral / (strike2 - strike1)` | 100 USDC / $100 width = 1 contract |
+| **Butterfly** | `collateral / (middle - lower)` | 50 USDC / $50 wing = 1 contract |
+| **Condor** | `collateral / (strike2 - strike1)` | 100 USDC / $100 inner width = 1 contract |
+
+### When to Use Each Structure
+
+| Structure | Market View | Risk/Reward | Best For |
+|-----------|-------------|-------------|----------|
+| **PUT** | Bearish | Unlimited profit, lose premium | Strong downside conviction |
+| **CALL** | Bullish | Unlimited profit, lose premium | Strong upside conviction |
+| **PUT_SPREAD** | Moderately bearish | Capped profit/loss | Cheaper than vanilla put |
+| **CALL_SPREAD** | Moderately bullish | Capped profit/loss | Cheaper than vanilla call |
+| **PUT_FLY** | Neutral/range-bound | High reward if pinned | Low cost, precise target |
+| **CALL_FLY** | Neutral/range-bound | High reward if pinned | Low cost, precise target |
+| **CONDOR** | Neutral/range-bound | Lower reward, wider range | More forgiving than fly |
+| **IRON_CONDOR** | Neutral | Collect premium both sides | Range-bound markets |
+
+### Multi-Strike RFQ Examples
+
+**2-Strike Spread (CALL_SPREAD):**
+```bash
+npx tsx scripts/build-rfq.ts \
+  --underlying ETH \
+  --type CALL \
+  --strikes 2000,2100 \
+  --expiry 1774684800 \
+  --contracts 1 \
+  --direction buy
+```
+*Buy $2000 call, sell $2100 call. Max profit = $100 - premium. Max loss = premium.*
+
+**3-Strike Butterfly (PUT_FLY):**
+```bash
+npx tsx scripts/build-rfq.ts \
+  --underlying ETH \
+  --type PUT \
+  --strikes 1900,1850,1800 \
+  --expiry 1774684800 \
+  --contracts 1 \
+  --direction buy
+```
+*Profit maximized if ETH settles at $1850. Low cost, high reward if pinned.*
+
+**4-Strike Condor (IRON_CONDOR):**
+```bash
+npx tsx scripts/build-rfq.ts \
+  --underlying ETH \
+  --type PUT \
+  --strikes 1800,1900,2100,2200 \
+  --expiry 1774684800 \
+  --contracts 1 \
+  --direction sell
+```
+*Sell iron condor. Collect premium if ETH stays between $1900-$2100.*
+
+---
+
 ## Orderbook vs RFQ: When to Use Each
 
 ### Orderbook Trading
@@ -117,7 +213,7 @@ You → Fill existing order → Instant trade
 
 ### RFQ (Request for Quote)
 
-**What it is:** Request a custom quote from market makers - they respond within 6 minutes.
+**What it is:** Request a custom quote from market makers - they respond within 45 seconds.
 
 ```
 You → Submit RFQ → MM sees it → MM sends offer → You settle
@@ -131,7 +227,7 @@ You → Submit RFQ → MM sees it → MM sends offer → You settle
 **How it works:**
 1. Build RFQ: `npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry <timestamp> --contracts 0.1 --direction buy`
 2. Send transaction with the returned `to` and `data`
-3. Wait up to 6 minutes for MM response
+3. Wait up to 45 seconds for MM response
 4. Settle when offer received
 
 ### Decision Matrix
@@ -280,7 +376,7 @@ Step 4: Approve tokens (if selling/first time)
 Step 5: Send RFQ transaction
    └─> npx tsx scripts/send-transaction.ts --to <from step 3> --data <from step 3> --seed "..." --wait
 
-Step 6: Wait for MM offer (up to 6 minutes)
+Step 6: Wait for MM offer (up to 45 seconds)
 ```
 
 ### Workflow 3: Check Positions
@@ -323,7 +419,7 @@ Agent: No orderbook liquidity at $1900. I'll submit an RFQ.
 1. Builds RFQ for ETH-1900-PUT sell
 2. Approves USDC if needed
 3. Submits RFQ
-4. "RFQ submitted. MMs have 6 minutes to respond."
+4. "RFQ submitted. MMs have 45 seconds to respond."
 ```
 
 ### "Check my positions"
@@ -361,7 +457,8 @@ Agent: No orderbook liquidity at $1900. I'll submit an RFQ.
 | Command | Description |
 |---------|-------------|
 | `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute` | Fill orderbook order |
-| `npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry <ts> --contracts 0.1 --direction buy` | Build RFQ |
+| `npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry <ts> --contracts 0.1 --direction buy` | Build vanilla RFQ (45s deadline) |
+| `npx tsx scripts/build-rfq.ts --underlying ETH --type CALL --strikes 2000,2100 --expiry <ts> --contracts 1 --direction buy` | Build multi-strike RFQ (spread/fly/condor) |
 | `npx tsx scripts/approve-token.ts --token <addr> --spender <addr> --max --seed "..."` | Approve tokens |
 | `npx tsx scripts/send-transaction.ts --to <addr> --data <hex> --seed "..."` | Send transaction |
 
@@ -456,7 +553,7 @@ Optional flags:
 - **LOCAL CUSTODY**: Your seed phrase stays on your machine. The agent never sends it anywhere.
 - **TRANSACTIONS**: Irreversible once broadcast. Always verify before sending.
 - **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts.
-- **RFQ DEADLINE**: MMs have 6 minutes to respond to RFQs.
+- **RFQ DEADLINE**: MMs have 45 seconds to respond to RFQs.
 - **GAS**: Ensure wallet has ETH on Base for gas fees.
 
 ---

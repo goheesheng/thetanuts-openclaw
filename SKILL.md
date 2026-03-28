@@ -151,6 +151,75 @@ Beyond vanilla PUT and CALL options, Thetanuts supports advanced multi-strike st
 | **CONDOR** | Neutral/range-bound | Lower reward, wider range | More forgiving than fly |
 | **IRON_CONDOR** | Neutral | Collect premium both sides | Range-bound markets |
 
+### Strategy Recommendation Decision Tree
+
+When a user asks for a strategy recommendation, follow this decision tree:
+
+```
+User wants to trade options
+        │
+        ▼
+┌─────────────────────────────┐
+│ What is their market view?  │
+└─────────────────────────────┘
+        │
+        ├── STRONGLY DIRECTIONAL (high conviction)
+        │   │
+        │   ├── Bullish ──────► CALL (vanilla)
+        │   │                   "Unlimited upside, lose premium if wrong"
+        │   │
+        │   └── Bearish ──────► PUT (vanilla)
+        │                       "Unlimited downside profit, lose premium if wrong"
+        │
+        ├── MODERATELY DIRECTIONAL (some conviction)
+        │   │
+        │   ├── Bullish ──────► CALL_SPREAD
+        │   │                   "Cheaper than vanilla, capped profit/loss"
+        │   │
+        │   └── Bearish ──────► PUT_SPREAD
+        │                       "Cheaper than vanilla, capped profit/loss"
+        │
+        ├── NEUTRAL / RANGE-BOUND
+        │   │
+        │   └── Check collateral size
+        │       │
+        │       ├── Small (under $50) ──► Butterfly (CALL_FLY/PUT_FLY)
+        │       │                         "Cheapest, profit if pinned at middle"
+        │       │
+        │       └── Larger ───────────► Condor (CALL_CONDOR/PUT_CONDOR)
+        │                               "Wider profit range, more forgiving"
+        │
+        └── SELLING PREMIUM (income strategy)
+                │
+                └── Neutral view ────► IRON_CONDOR
+                                       "Collect premium both sides"
+```
+
+### Collateral Efficiency Comparison
+
+Different structures give you different exposure per dollar of collateral:
+
+| Structure | $100 Collateral Gets You | Relative Efficiency |
+|-----------|-------------------------|---------------------|
+| **Vanilla PUT** (at $2000 strike) | ~0.05 contracts | 1x (baseline) |
+| **PUT_SPREAD** ($100 width) | 1 contract | **20x more** |
+| **Butterfly** ($50 wing width) | 2 contracts | **40x more** |
+| **Condor** ($100 inner width) | 1 contract | **20x more** |
+
+**Key Insight:** For users with small collateral (under $100), spreads and butterflies provide significantly more market exposure than vanilla options.
+
+### Strategy Selection Inputs
+
+When recommending a strategy, consider:
+
+| Input | How to Determine | Impact on Recommendation |
+|-------|-----------------|-------------------------|
+| **Market View** | Ask user: bullish, bearish, or neutral? | Determines direction (PUT vs CALL vs neutral structures) |
+| **Conviction Level** | Ask: strong view or moderate? | High = vanilla, Moderate = spread |
+| **Collateral Size** | Check wallet balance | Small = prefer spreads/butterflies for efficiency |
+| **Risk Tolerance** | Ask: capped risk or unlimited potential? | Risk-averse = spreads, Risk-seeking = vanilla |
+| **Expiry Timeframe** | Check expiry distance | Short-term neutral = butterfly, Longer = condor |
+
 ### Multi-Strike RFQ Examples
 
 **2-Strike Spread (CALL_SPREAD):**
@@ -377,6 +446,11 @@ Step 5: Send RFQ transaction
    └─> npx tsx scripts/send-transaction.ts --to <from step 3> --data <from step 3> --seed "..." --wait
 
 Step 6: Wait for MM offer (up to 45 seconds)
+
+Step 7: Verify RFQ fill
+   └─> npx tsx scripts/check-rfq-fill.ts --address <wallet> --ticker <expected> --since <submission_timestamp>
+   └─> If filled: Shows position details
+   └─> If not filled: Shows suggestions for next steps
 ```
 
 ### Workflow 3: Check Positions
@@ -429,6 +503,99 @@ Agent: No orderbook liquidity at $1900. I'll submit an RFQ.
 2. Runs: `npx tsx scripts/get-positions.ts 0xYourAddress`
 3. Shows open positions with current P&L
 
+### "I have $50 and I'm bearish on ETH, recommend a strategy"
+
+**Agent's Decision Process:**
+1. User has small collateral ($50) → Consider spreads for efficiency
+2. User is bearish → PUT direction
+3. Check conviction: "Moderately bearish" (didn't say "very bearish")
+4. Recommendation: **PUT_SPREAD**
+
+**Agent:**
+```
+With $50 and a bearish view, I recommend a PUT SPREAD instead of vanilla PUT.
+
+Why PUT_SPREAD over vanilla PUT?
+┌─────────────────────────────────────────────────────┐
+│ Vanilla PUT ($1900)     │ PUT_SPREAD ($1900/$1800)  │
+├─────────────────────────┼───────────────────────────┤
+│ $50 → ~0.026 contracts  │ $50 → 0.5 contracts       │
+│ Unlimited profit        │ Max profit: $50           │
+│ Lose $50 if wrong       │ Lose $50 if wrong         │
+│ Need big move to profit │ Profit if drops below $1900│
+└─────────────────────────┴───────────────────────────┘
+
+The spread gives you 20x more exposure for the same collateral!
+
+Available strikes for tomorrow's expiry:
+• PUT_SPREAD $1950/$1850 - Bid: $12/contract
+• PUT_SPREAD $1900/$1800 - Bid: $8/contract
+
+Which spread would you like? Or prefer vanilla for unlimited upside?
+```
+
+### "I think ETH will stay around $2000 this week"
+
+**Agent's Decision Process:**
+1. User expects range-bound/neutral market
+2. Check collateral and ask for size
+3. Recommendation: **Butterfly or Condor**
+
+**Agent:**
+```
+For a range-bound view around $2000, I recommend a BUTTERFLY or CONDOR.
+
+How much collateral do you want to use?
+```
+
+**User:** "About $30"
+
+**Agent:**
+```
+With $30 and a neutral view around $2000, I recommend a CALL BUTTERFLY:
+
+ETH-2050-CALL_FLY (strikes: 2000/2050/2100)
+• Cost: ~$5 per contract
+• Max profit: ~$45 per contract (at exactly $2050)
+• $30 gets you: ~6 contracts
+• Break-even range: $2005 - $2095
+
+Why butterfly over condor?
+• Butterfly is cheaper (more contracts per dollar)
+• Condor has wider profit range but costs more
+• For $30, butterfly gives better risk/reward
+
+If you want a wider safety margin, consider a CONDOR with larger collateral.
+
+Build this RFQ? (y/n)
+```
+
+### "I want to sell premium and collect income"
+
+**Agent's Decision Process:**
+1. User wants to sell premium → Income strategy
+2. Ask about market view
+3. If neutral → **IRON_CONDOR**
+
+**Agent:**
+```
+For selling premium, I recommend an IRON CONDOR if you're neutral on ETH.
+
+IRON_CONDOR: Sell both a PUT_SPREAD and CALL_SPREAD
+• Collect premium from both sides
+• Profit if ETH stays in range
+• Defined risk on both tails
+
+Current opportunity for ETH-29MAR26:
+IRON_CONDOR strikes: 1800/1900/2100/2200
+• Current ETH: $2000 (right in the middle!)
+• Premium collected: ~$15 per contract
+• Max loss: $85 per contract (if ETH moves beyond wings)
+• Win zone: ETH stays between $1900-$2100
+
+This is a neutral strategy - do you expect ETH to stay range-bound?
+```
+
 ---
 
 ## Commands Reference
@@ -461,6 +628,7 @@ Agent: No orderbook liquidity at $1900. I'll submit an RFQ.
 | `npx tsx scripts/build-rfq.ts --underlying ETH --type CALL --strikes 2000,2100 --expiry <ts> --contracts 1 --direction buy` | Build multi-strike RFQ (spread/fly/condor) |
 | `npx tsx scripts/approve-token.ts --token <addr> --spender <addr> --max --seed "..."` | Approve tokens |
 | `npx tsx scripts/send-transaction.ts --to <addr> --data <hex> --seed "..."` | Send transaction |
+| `npx tsx scripts/check-rfq-fill.ts --address <wallet> --ticker <expected> --since <ts>` | Verify RFQ fill status |
 
 ### Position Commands
 

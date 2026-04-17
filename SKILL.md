@@ -6,6 +6,99 @@ user-invocable: true
 metadata: {"openclaw":{"emoji":"📈","install":[{"type":"node","package":"."}]}}
 ---
 
+## First-Time Setup (Onboarding Flow)
+
+**IMPORTANT: On EVERY new conversation, the agent MUST check wallet status before doing anything else.**
+
+### Automatic Onboarding Check
+
+```
+Step 1: Check wallet status
+   └─> node scripts/wallet-discover.js
+
+Step 2: Interpret the result:
+   - configured: false → Enter ONBOARDING MODE
+   - configured: true  → Greet user with their address, proceed normally
+```
+
+### Onboarding Mode (No Wallet Detected)
+
+When no wallet is configured, guide the user through setup in this order:
+
+```
+No wallet detected
+      │
+      ▼
+┌─────────────────────────────────────────┐
+│ "Welcome to Thetanuts Options Trading!  │
+│  Let's get you set up in 3 steps."      │
+└─────────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────────┐
+│ Step 1: Create or import a wallet       │
+│ • New user → wallet-create.js           │
+│ • Have a seed? → wallet-import.js       │
+│                                         │
+│ WARN: Use a DEDICATED wallet.           │
+│ Never reuse your primary wallet seed.   │
+│ Custody stays LOCAL on your machine.    │
+└─────────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────────┐
+│ Step 2: Verify & fund the wallet        │
+│ • Run wallet-discover.js → show address │
+│ • Run wallet-balance.js --chain         │
+│   base-mainnet                          │
+│ • If zero balance: explain funding      │
+│   - Need ETH on Base for gas fees       │
+│   - Need USDC for PUT trades            │
+│   - Need WETH for CALL trades           │
+│   - Bridge via bridge.base.org          │
+└─────────────────────────────────────────┘
+      │
+      ▼
+┌─────────────────────────────────────────┐
+│ Step 3: Market overview & first trade   │
+│ • Fetch prices: get-prices.ts           │
+│ • WebSearch for market news             │
+│ • Ask risk preference (LOW/MED/HIGH)    │
+│ • Show first strategy recommendation    │
+└─────────────────────────────────────────┘
+```
+
+### Welcome Message (After Onboarding or Returning User)
+
+Once wallet is configured, present:
+
+```
+Welcome to Thetanuts Options Trading!
+
+Your wallet: 0x...
+Chain: Base Mainnet
+Balances: X ETH (gas) | Y USDC | Z WETH
+
+What would you like to do?
+• "Show me options"       → View available strikes and prices
+• "Recommend a strategy"  → I'll check market news and suggest based on your risk preference
+• "Check my positions"    → View open trades and P&L on expired ones
+• "What's the market doing?" → Latest crypto news and how it affects options
+
+New to options? Just say "teach me about options"
+```
+
+### Security Reminders (shown during onboarding)
+
+- **DEDICATED WALLET**: Use a dedicated wallet seed for this integration. Never reuse your primary wallet.
+- **LOCAL CUSTODY**: Your seed phrase stays on your machine. The agent never sends it anywhere.
+- **TRANSACTIONS**: Irreversible once broadcast. Always verify before sending.
+- **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts.
+- **GAS**: Ensure wallet has ETH on Base for gas fees.
+- **RFQ KEYS**: Back up `.thetanuts-keys/` directory — lost keys cannot decrypt past offers.
+
+---
+
 # Thetanuts Options Trading
 
 ## What is TNUT Agent?
@@ -140,85 +233,200 @@ Beyond vanilla PUT and CALL options, Thetanuts supports advanced multi-strike st
 
 ### When to Use Each Structure
 
-| Structure | Market View | Risk/Reward | Best For |
-|-----------|-------------|-------------|----------|
-| **PUT** | Bearish | Unlimited profit, lose premium | Strong downside conviction |
-| **CALL** | Bullish | Unlimited profit, lose premium | Strong upside conviction |
-| **PUT_SPREAD** | Moderately bearish | Capped profit/loss | Cheaper than vanilla put |
-| **CALL_SPREAD** | Moderately bullish | Capped profit/loss | Cheaper than vanilla call |
-| **PUT_FLY** | Neutral/range-bound | High reward if pinned | Low cost, precise target |
-| **CALL_FLY** | Neutral/range-bound | High reward if pinned | Low cost, precise target |
-| **CONDOR** | Neutral/range-bound | Lower reward, wider range | More forgiving than fly |
-| **IRON_CONDOR** | Neutral | Collect premium both sides | Range-bound markets |
+| Structure | Market View | Risk Level | Risk/Reward | Best For |
+|-----------|-------------|------------|-------------|----------|
+| **PUT** | Bearish | HIGH | Large profit (up to strike - premium), lose premium | Strong downside conviction |
+| **CALL** | Bullish | HIGH | Unlimited profit, lose premium | Strong upside conviction |
+| **PUT_SPREAD** | Moderately bearish | MEDIUM | Capped profit/loss | Cheaper than vanilla put |
+| **CALL_SPREAD** | Moderately bullish | MEDIUM | Capped profit/loss | Cheaper than vanilla call |
+| **PUT_FLY** | Neutral/range-bound | LOW | High reward if pinned, tiny cost | Low cost, precise target |
+| **CALL_FLY** | Neutral/range-bound | LOW | High reward if pinned, tiny cost | Low cost, precise target |
+| **CONDOR** | Neutral/range-bound | MEDIUM | Lower reward, wider range | More forgiving than fly |
+| **IRON_CONDOR** | Neutral | LOW | Collect premium both sides | Range-bound markets |
+| **PHYSICAL_CALL** | Bullish (want delivery) | HIGH | Receive underlying asset | Physical settlement needed |
+| **PHYSICAL_PUT** | Bearish (want delivery) | HIGH | Deliver underlying asset | Physical settlement needed |
 
-### Strategy Recommendation Decision Tree
+### Risk-Categorized Strategy Recommendations
 
-When a user asks for a strategy recommendation, follow this decision tree:
+When a user asks for a strategy recommendation, **FIRST ask about their risk preference**, then match to appropriate strategies within that tier.
+
+#### Step 1: Ask the User's Risk Level
+
+Present these three options:
+
+| Risk Level | What It Means | Max Loss | Profit Potential |
+|------------|---------------|----------|-----------------|
+| **LOW** | Defined max loss, premium collection, high probability of small wins | Capped & known upfront | Capped but consistent |
+| **MEDIUM** | Spreads with balanced risk/reward, moderate probability | Capped at spread width | Capped at spread width |
+| **HIGH** | Full directional exposure, low probability of large wins | Full premium (buyer) or very large (seller) | Unlimited (buyer) |
+
+#### Step 2: Strategy Decision Tree by Risk Level
 
 ```
-User wants to trade options
+User wants a strategy recommendation
         │
         ▼
-┌─────────────────────────────┐
-│ What is their market view?  │
-└─────────────────────────────┘
+┌──────────────────────────────────┐
+│ Step 1: Check market news        │
+│ (WebSearch - see News section)   │
+└──────────────────────────────────┘
         │
-        ├── STRONGLY DIRECTIONAL (high conviction)
-        │   │
-        │   ├── Bullish ──────► CALL (vanilla)
-        │   │                   "Unlimited upside, lose premium if wrong"
-        │   │
-        │   └── Bearish ──────► PUT (vanilla)
-        │                       "Unlimited downside profit, lose premium if wrong"
+        ▼
+┌──────────────────────────────────┐
+│ Step 2: Ask risk level           │
+│ LOW / MEDIUM / HIGH              │
+└──────────────────────────────────┘
         │
-        ├── MODERATELY DIRECTIONAL (some conviction)
+        ├── LOW RISK
         │   │
-        │   ├── Bullish ──────► CALL_SPREAD
-        │   │                   "Cheaper than vanilla, capped profit/loss"
+        │   ├── Neutral view ──────► IRON_CONDOR (sell)
+        │   │                        Collect premium both sides, profit if range-bound
+        │   │                        Max loss: spread width - premium
+        │   │                        Max gain: premium collected
+        │   │                        Win prob: ~60-70% (price stays in range)
         │   │
-        │   └── Bearish ──────► PUT_SPREAD
-        │                       "Cheaper than vanilla, capped profit/loss"
+        │   ├── Slightly bullish ──► PUT_FLY (buy) or Sell PUT via orderbook
+        │   │                        Butterfly: tiny cost, big payout if pinned
+        │   │                        Max loss: premium paid (very small)
+        │   │                        Max gain: wing width - premium
+        │   │
+        │   ├── Slightly bearish ──► CALL_FLY (buy) or Sell CALL via orderbook
+        │   │                        Same as above, opposite direction
+        │   │
+        │   └── Range-bound ───────► Butterfly (CALL_FLY / PUT_FLY)
+        │                            Cheapest defined-risk play
+        │                            Max loss: premium paid (~$3-5/contract)
+        │                            Max gain: wing width (~$47-50/contract)
         │
-        ├── NEUTRAL / RANGE-BOUND
+        ├── MEDIUM RISK
         │   │
-        │   └── Check collateral size
-        │       │
-        │       ├── Small (under $50) ──► Butterfly (CALL_FLY/PUT_FLY)
-        │       │                         "Cheapest, profit if pinned at middle"
-        │       │
-        │       └── Larger ───────────► Condor (CALL_CONDOR/PUT_CONDOR)
-        │                               "Wider profit range, more forgiving"
+        │   ├── Bullish ──────────► CALL_SPREAD (buy)
+        │   │                       Cheaper than vanilla call, capped both sides
+        │   │                       Max loss: premium paid
+        │   │                       Max gain: spread width - premium
+        │   │                       Risk/Reward: typically 1:1 to 1:3
+        │   │
+        │   ├── Bearish ─────────► PUT_SPREAD (buy)
+        │   │                       Cheaper than vanilla put, capped both sides
+        │   │                       Max loss: premium paid
+        │   │                       Max gain: spread width - premium
+        │   │
+        │   └── Range-bound ─────► CONDOR (CALL_CONDOR / PUT_CONDOR)
+        │                          Wider profit range than butterfly
+        │                          Max loss: wing width - premium collected
+        │                          Max gain: premium collected (sell) or inner width (buy)
         │
-        └── SELLING PREMIUM (income strategy)
-                │
-                └── Neutral view ────► IRON_CONDOR
-                                       "Collect premium both sides"
+        └── HIGH RISK
+            │
+            ├── Bullish ──────────► CALL (vanilla buy) / INVERSE_CALL
+            │                       Unlimited profit potential if price rises
+            │                       Max loss: full premium paid
+            │                       Max gain: unlimited
+            │
+            ├── Bearish ─────────► PUT (vanilla buy)
+            │                       Unlimited profit if price crashes
+            │                       Max loss: full premium paid
+            │                       Max gain: strike - premium (if price → 0)
+            │
+            └── Selling premium ──► Naked PUT sell or CALL sell
+                                    Collect premium, very large risk if wrong
+                                    Max loss: strike price (PUT) or unlimited (CALL)
+                                    Max gain: premium collected
 ```
 
-### Collateral Efficiency Comparison
+#### Risk Summary Card (Always Show When Recommending)
+
+Every strategy recommendation MUST include this card:
+
+```
+┌────────────────────────────────────────────────┐
+│ Strategy: [STRATEGY NAME]                      │
+│ Risk Level: [LOW / MEDIUM / HIGH]              │
+│ Direction: [BULLISH / BEARISH / NEUTRAL]       │
+├────────────────────────────────────────────────┤
+│ Max Loss:   $[amount] ([description])          │
+│ Max Gain:   $[amount] ([description])          │
+│ Break-even: $[price]                           │
+│ Win Zone:   Price between $[low] and $[high]   │
+│ Collateral: [amount] [token]                   │
+└────────────────────────────────────────────────┘
+```
+
+#### Collateral Efficiency Comparison
 
 Different structures give you different exposure per dollar of collateral:
 
-| Structure | $100 Collateral Gets You | Relative Efficiency |
-|-----------|-------------------------|---------------------|
-| **Vanilla PUT** (at $2000 strike) | ~0.05 contracts | 1x (baseline) |
-| **PUT_SPREAD** ($100 width) | 1 contract | **20x more** |
-| **Butterfly** ($50 wing width) | 2 contracts | **40x more** |
-| **Condor** ($100 inner width) | 1 contract | **20x more** |
+| Structure | $100 Collateral Gets You | Relative Efficiency | Risk Level |
+|-----------|-------------------------|---------------------|------------|
+| **Vanilla PUT** (at $2000 strike) | ~0.05 contracts | 1x (baseline) | HIGH |
+| **PUT_SPREAD** ($100 width) | 1 contract | **20x more** | MEDIUM |
+| **Butterfly** ($50 wing width) | 2 contracts | **40x more** | LOW |
+| **Condor** ($100 inner width) | 1 contract | **20x more** | MEDIUM |
+| **Iron Condor** ($100 inner width) | 1 contract | **20x more** | LOW |
 
-**Key Insight:** For users with small collateral (under $100), spreads and butterflies provide significantly more market exposure than vanilla options.
+**Key Insight:** For users with small collateral (under $100), LOW and MEDIUM risk strategies (spreads, butterflies) provide significantly more market exposure than HIGH risk vanilla options.
 
-### Strategy Selection Inputs
+#### Strategy Selection Inputs
 
-When recommending a strategy, consider:
+When recommending a strategy, consider these inputs in order of priority:
 
-| Input | How to Determine | Impact on Recommendation |
-|-------|-----------------|-------------------------|
-| **Market View** | Ask user: bullish, bearish, or neutral? | Determines direction (PUT vs CALL vs neutral structures) |
-| **Conviction Level** | Ask: strong view or moderate? | High = vanilla, Moderate = spread |
-| **Collateral Size** | Check wallet balance | Small = prefer spreads/butterflies for efficiency |
-| **Risk Tolerance** | Ask: capped risk or unlimited potential? | Risk-averse = spreads, Risk-seeking = vanilla |
-| **Expiry Timeframe** | Check expiry distance | Short-term neutral = butterfly, Longer = condor |
+| Priority | Input | How to Determine | Impact on Recommendation |
+|----------|-------|-----------------|-------------------------|
+| **1** | **Risk Level** | Ask user: low, medium, or high? | PRIMARY filter — determines available strategies |
+| **2** | **Market View** | Ask user: bullish, bearish, or neutral? | Determines direction within risk tier |
+| **3** | **News/Events** | WebSearch for recent market events | Informs conviction level and timing |
+| **4** | **Collateral Size** | Check wallet balance | Small = prefer spreads/butterflies for efficiency |
+| **5** | **Conviction Level** | Ask: strong view or moderate? | High conviction may justify higher risk tier |
+| **6** | **Expiry Timeframe** | Check available expiries | Short-term neutral = butterfly, Longer = condor |
+
+### News & Events Integration
+
+**Before EVERY strategy recommendation, the agent MUST search for recent market-moving events.** This ensures context-aware recommendations, not purely technical ones.
+
+#### How to Fetch Market News
+
+Use WebSearch with these queries (run at least 2):
+
+| Query | Purpose |
+|-------|---------|
+| `"crypto market news today"` | General market sentiment |
+| `"ethereum price catalyst"` or `"bitcoin price catalyst"` | Asset-specific events |
+| `"FOMC meeting crypto"` or `"CPI inflation crypto"` | Macro events affecting crypto |
+| `"crypto options expiry this week"` | Options-specific events (pin risk, gamma squeeze) |
+| `"ethereum upgrade"` or `"bitcoin ETF flows"` | Protocol/regulatory catalysts |
+
+If WebSearch returns a relevant article, use **WebFetch** to get deeper details.
+
+#### Translating News to Strategy
+
+| Event Type | Expected Impact | Suggested Direction | Risk Note |
+|------------|----------------|--------------------|--------------------|
+| Rate cut / dovish Fed | Bullish | CALL-side strategies | MEDIUM — market may "sell the news" |
+| Rate hike / hawkish Fed | Bearish | PUT-side strategies | MEDIUM — may already be priced in |
+| Major exchange hack/exploit | Bearish (short-term) | PUT-side strategies | HIGH — volatility spike |
+| ETF approval / large inflows | Bullish | CALL-side strategies | MEDIUM — catalyst may be priced in |
+| Protocol upgrade (successful) | Bullish for that asset | CALL-side strategies | LOW-MEDIUM |
+| Regulatory crackdown | Bearish | PUT-side or neutral | HIGH — uncertainty and fear |
+| Large options expiry (high OI) | Neutral → pin risk | Butterflies / Condors (LOW risk) | LOW — defined risk |
+| No significant news | Neutral / range-bound | Premium selling (Iron Condor) | LOW — collect theta decay |
+| Conflicting signals | Uncertain | Neutral structures or wait | Reduce size, use LOW risk |
+
+#### News-Informed Recommendation Template
+
+When presenting a strategy recommendation, always include market context:
+
+```
+Market Context (from recent news):
+• [Event 1]: [brief description] → [bullish/bearish/neutral]
+• [Event 2]: [brief description] → [bullish/bearish/neutral]
+
+Overall market bias: [BULLISH / BEARISH / NEUTRAL / UNCERTAIN]
+
+Based on [RISK LEVEL] risk preference and current market conditions:
+[Strategy recommendation with Risk Summary Card]
+```
+
+---
 
 ### Multi-Strike RFQ Examples
 
@@ -477,6 +685,87 @@ Step 7: Verify RFQ fill
 npx tsx scripts/get-positions.ts 0xYourWalletAddress
 ```
 
+### Workflow 3b: Portfolio Performance & ROI Review
+
+After trades expire, show the user their realized returns. This workflow uses existing scripts — no new tools needed.
+
+#### How to Calculate ROI
+
+```
+Step 1: Fetch all positions
+   └─> npx tsx scripts/get-positions.ts <wallet_address>
+
+Step 2: Categorize by status
+   - Settled/expired positions → REALIZED P&L
+   - Active/open positions → UNREALIZED (show separately)
+
+Step 3: For each expired position
+   - Use the pnlUsd field from get-positions.ts (if available)
+   - If pnlUsd is missing, calculate manually:
+     └─> npx tsx scripts/calculate-payout.ts --type <PUT|CALL> --strike <strike> --settlement <settlement_price> --contracts <amount> [--is-buyer]
+
+Step 4: Aggregate and present using the template below
+```
+
+#### ROI Calculation Logic
+
+**For BUYERS (paid premium):**
+- Cost basis = premium paid (collateral committed)
+- Return = pnlUsd or calculated payout
+- ROI = (return / cost_basis) × 100%
+- Expired worthless → ROI = **-100%**
+- Example: Paid $10 premium, option settled for $25 payout → ROI = +150%
+
+**For SELLERS (received premium):**
+- Credit received = premium collected
+- Settlement cost = pnlUsd (negative = you paid out)
+- ROI = (net_pnl / collateral_locked) × 100%
+- Expired worthless for buyer (good for seller) → ROI = +(premium / collateral) × 100%
+- Example: Collected $8 premium on $100 collateral, expired OTM → ROI = +8%
+
+#### Portfolio Performance Summary Template
+
+Present results in this format:
+
+```
+Portfolio Performance Summary
+══════════════════════════════════════════════════════════
+Wallet: 0x...
+Period: [earliest expired trade] to [latest expired trade]
+
+REALIZED P&L (Expired Positions)
+┌──────────────────────┬──────┬─────────┬─────────┐
+│ Trade                │ Side │ P&L     │ ROI     │
+├──────────────────────┼──────┼─────────┼─────────┤
+│ ETH-28MAR-2000-P     │ SELL │ +$12.50 │ +6.25%  │
+│ ETH-28MAR-2100-C     │ BUY  │ -$8.00  │ -100%   │
+│ ETH-04APR-1900/1800  │ BUY  │ +$45.00 │ +150%   │
+├──────────────────────┼──────┼─────────┼─────────┤
+│ TOTAL                │      │ +$49.50 │         │
+└──────────────────────┴──────┴─────────┴─────────┘
+
+Win rate: 2/3 (66.7%)
+Average P&L per trade: +$16.50
+Best trade:  ETH PUT_SPREAD (+$45.00, +150%)
+Worst trade: ETH CALL (-$8.00, expired worthless)
+
+OPEN POSITIONS
+┌──────────────────────┬──────┬───────────┬──────────┬────────┐
+│ Trade                │ Side │ Contracts │ Expiry   │ Status │
+├──────────────────────┼──────┼───────────┼──────────┼────────┤
+│ ETH-18APR-2000-P     │ BUY  │ 0.5       │ Apr 18   │ Active │
+└──────────────────────┴──────┴───────────┴──────────┴────────┘
+```
+
+#### When to Show Performance
+
+- User asks "how are my trades doing?", "show my P&L", "what's my ROI?"
+- User asks "check my positions" AND has expired positions → include ROI for expired ones
+- Proactively mention performance when user has recently expired positions they haven't reviewed
+- After any trade settles, offer to show the outcome: "Your ETH PUT just expired. Want to see how it did?"
+
+---
+
 ### Workflow 4: Early Settlement (Accept MM Offer Before Deadline)
 
 After a market maker submits an encrypted offer to your RFQ, you can decrypt and accept it early — no need to wait for the full deadline.
@@ -499,6 +788,132 @@ Step 4: Accept the offer early
   - TX: `0x105f75cdfb64a3796100f6d667bc4f7fec3836d2b5aa5c43b66073a1b40964ee`
 - RFQ 785 (PUT CONDOR $1600/$1700/$1800/$1900): MM offered 0.003248 USDC, early settle at 04:15:00 UTC
   - TX: `0xa89fb6dbad43b430399bbdec878927185e602b7df9b5390f71d2d11c33e4d850`
+
+### Workflow 5: Cancel RFQ & Claim Refund
+
+If a user wants to cancel an active RFQ before it settles, or if no MM responded:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ RFQ submitted                                       │
+│         │                                           │
+│         ▼                                           │
+│ ┌─────────────────────┐                             │
+│ │ MM responded?       │                             │
+│ └─────────────────────┘                             │
+│     │           │                                   │
+│    Yes          No                                  │
+│     │           │                                   │
+│     ▼           ▼                                   │
+│ ┌─────────┐  ┌──────────────────────────────┐       │
+│ │ Accept  │  │ RFQ expires with no offers   │       │
+│ │ or      │  │ → No collateral was locked   │       │
+│ │ Cancel? │  │ → Nothing to refund          │       │
+│ └─────────┘  └──────────────────────────────┘       │
+│   │     │                                           │
+│  Accept Cancel                                      │
+│   │     │                                           │
+│   ▼     ▼                                           │
+│ Settle  Cancel RFQ                                  │
+│         └─> cancelQuotation(quotationId)            │
+│         └─> Collateral returned to wallet           │
+└─────────────────────────────────────────────────────┘
+```
+
+#### Cancel an Active RFQ
+
+```typescript
+// Cancel before settlement — requester only
+const { to, data } = client.optionFactory.encodeCancelQuotation(quotationId);
+// Send transaction with {to, data} via send-transaction.ts
+```
+
+#### Cancel an Offer (Market Maker Side)
+
+```typescript
+// MM cancels their offer before settlement
+const { to, data } = client.optionFactory.encodeCancelOfferForQuotation(quotationId);
+```
+
+#### Check RFQ Status
+
+```typescript
+// Query current state of an RFQ
+const quotation = await client.optionFactory.getQuotation(quotationId);
+// quotation status: 'active' | 'settled' | 'cancelled'
+// quotation.isActive — whether RFQ is still open
+// quotation.currentWinner — winning offeror's address
+```
+
+#### Refund Rules
+
+| Scenario | Collateral | What Happens |
+|----------|-----------|-------------|
+| **Buy RFQ, no MM responds** | No collateral locked by buyer | Nothing to refund — buyer only pays premium if settled |
+| **Buy RFQ, user cancels before settlement** | No collateral locked | RFQ cancelled, no action needed |
+| **Sell RFQ, no MM responds** | Collateral held by factory | RFQ expires, collateral returned automatically |
+| **Sell RFQ, user cancels before settlement** | Collateral held by factory | `cancelQuotation()` releases collateral back to wallet |
+| **Sell RFQ, settled** | Collateral locked in option | Collateral backs the option until expiry/settlement |
+| **Orderbook fill (buy or sell)** | Collateral paid/locked at fill | Irreversible — no cancellation for orderbook fills |
+
+**IMPORTANT:** Orderbook fills are INSTANT and IRREVERSIBLE. Only RFQs can be cancelled (before settlement).
+
+---
+
+### Buy vs Sell Order: Collateral & Token Flow
+
+**No ETH is sent as transaction value for option trades.** All collateral flows happen via ERC-20 token transfers (USDC, WETH). ETH is only used for gas fees.
+
+#### When BUYING Options
+
+```
+Buyer Flow:
+1. Premium is paid in collateral tokens (USDC for PUTs, WETH for CALLs)
+2. Token approval needed: approve-token.ts (one-time per token/spender)
+3. Collateral is transferred to the contract when the trade executes
+4. If RFQ: collateralAmount = 0 in the request (factory holds it)
+5. If Orderbook: collateral deducted at fill time
+
+What you PAY:   Premium (in USDC or WETH) + gas (in ETH)
+What you GET:   Option position (right to profit if price moves your way)
+At expiry:      Payout if in-the-money, or nothing if out-of-the-money
+```
+
+#### When SELLING Options
+
+```
+Seller Flow:
+1. Collateral is LOCKED to back the option (USDC for PUTs, WETH for CALLs)
+2. Token approval needed: approve-token.ts (one-time per token/spender)
+3. Collateral transferred to contract and held until expiry
+4. Premium is received from buyer
+
+What you PAY:   Collateral lock (USDC or WETH) + gas (in ETH)
+What you GET:   Premium received upfront
+At expiry:      Keep premium if OTM, or payout difference if ITM
+                Remaining collateral returned after settlement
+```
+
+#### Token Requirements Summary
+
+| Action | Collateral Token | Gas Token | Approval Needed |
+|--------|-----------------|-----------|-----------------|
+| **Buy PUT** | USDC (premium) | ETH | USDC → OptionFactory/OptionBook |
+| **Buy CALL** | WETH (premium) | ETH | WETH → OptionFactory/OptionBook |
+| **Sell PUT** | USDC (collateral lock) | ETH | USDC → OptionFactory/OptionBook |
+| **Sell CALL** | WETH (collateral lock) | ETH | WETH → OptionFactory/OptionBook |
+
+**Always check balance BEFORE trading:**
+```bash
+# Check USDC balance (for PUTs)
+node scripts/wallet-balance.js --chain base-mainnet --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+
+# Check WETH balance (for CALLs)
+node scripts/wallet-balance.js --chain base-mainnet --tokens 0x4200000000000000000000000000000000000006
+
+# Check ETH balance (for gas)
+node scripts/wallet-balance.js --chain base-mainnet
+```
 
 ---
 
@@ -781,6 +1196,154 @@ const price = client.utils.strikeFromChain(185000000000n); // 1850
 
 ## Example Conversations
 
+### "I just installed this, what do I do?"
+
+**Agent:** [Triggers onboarding flow]
+1. Runs `wallet-discover.js` → no wallet found
+2. Enters onboarding mode
+3. Guides through wallet creation
+4. Shows balance and funding instructions
+5. Fetches market news via WebSearch
+6. Asks risk preference
+7. Makes first strategy suggestion
+
+```
+Agent: Welcome to Thetanuts Options Trading! Let's get you set up.
+
+I see you don't have a wallet configured yet.
+Would you like to create a new wallet or import an existing one?
+
+[After wallet creation...]
+
+Your wallet: 0x7a3F...9e2B
+Chain: Base Mainnet
+Balance: 0 ETH | 0 USDC | 0 WETH
+
+To start trading, you'll need to fund your wallet:
+• ETH on Base for gas fees (bridge via bridge.base.org)
+• USDC for PUT options | WETH for CALL options
+
+Once funded, tell me:
+1. What's your risk preference? (Low / Medium / High)
+2. Are you bullish, bearish, or neutral on ETH?
+
+I'll check the latest market news and recommend a strategy!
+```
+
+### "What's happening in crypto that I should trade?"
+
+**Agent:**
+1. Uses WebSearch: `"crypto market news today"`
+2. Uses WebSearch: `"ethereum bitcoin price catalyst this week"`
+3. Summarizes findings and maps to strategy
+4. Asks risk preference
+5. Recommends with Risk Summary Card
+
+```
+Agent: Let me check the latest market news...
+
+Market Context:
+• Fed meeting tomorrow — markets expect rate hold, dovish tone → BULLISH
+• Large BTC options expiry ($2.3B) on Friday → potential pin risk → NEUTRAL
+• ETH Layer-2 TVL hitting ATH → positive sentiment → BULLISH
+
+Overall bias: MODERATELY BULLISH with near-term volatility expected
+
+What risk level are you comfortable with?
+
+LOW:  Iron Condor — collect premium, profit if ETH stays in range
+      Good for the expected range-bound action before Fed meeting
+MEDIUM: Call Spread — capped upside play on the bullish bias
+      Benefit from dovish Fed without unlimited downside
+HIGH: Vanilla Call — unlimited upside if Fed sparks a rally
+      Lose full premium if market sells the news
+```
+
+### "Show me LOW risk strategies"
+
+**Agent:**
+1. Fetches current prices and MM pricing
+2. Filters for LOW risk structures
+3. Shows Risk Summary Cards for each
+
+```
+Agent: Here are the LOW RISK strategies available right now:
+
+┌────────────────────────────────────────────────────────┐
+│ Strategy: Iron Condor (ETH)                            │
+│ Risk Level: LOW                                        │
+│ Direction: NEUTRAL                                     │
+├────────────────────────────────────────────────────────┤
+│ Strikes: $1800 / $1900 / $2100 / $2200                │
+│ Max Loss:   $85/contract                               │
+│ Max Gain:   $15/contract (premium collected)           │
+│ Win Zone:   ETH stays between $1900-$2100              │
+│ Current ETH: $2,050 (right in the sweet spot!)         │
+│ Collateral: ~$100 USDC per contract                    │
+└────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────┐
+│ Strategy: Put Butterfly (ETH)                          │
+│ Risk Level: LOW                                        │
+│ Direction: NEUTRAL (target $2,000)                     │
+├────────────────────────────────────────────────────────┤
+│ Strikes: $1950 / $2000 / $2050                         │
+│ Max Loss:   ~$3/contract (premium paid)                │
+│ Max Gain:   ~$47/contract (if ETH settles at $2,000)   │
+│ Win Zone:   ETH settles near $2,000                    │
+│ Collateral: ~$50 USDC per contract                     │
+└────────────────────────────────────────────────────────┘
+
+Which strategy interests you? Or want to see MEDIUM or HIGH risk options?
+```
+
+### "How did my trades do?"
+
+**Agent:**
+1. Runs `get-positions.ts` with user's wallet address
+2. Separates expired from active positions
+3. Computes ROI for each expired position
+4. Presents portfolio performance summary
+
+```
+Agent: Let me check your trading performance...
+
+Portfolio Performance Summary
+══════════════════════════════════════════════════════════
+Wallet: 0x7a3F...9e2B
+Period: Mar 14, 2026 to Apr 11, 2026
+
+REALIZED P&L (Expired Positions)
+┌───────────────────────┬──────┬──────────┬─────────┐
+│ Trade                 │ Side │ P&L      │ ROI     │
+├───────────────────────┼──────┼──────────┼─────────┤
+│ ETH-28MAR-2000-P      │ SELL │ +$12.50  │ +6.25%  │
+│ ETH-28MAR-2100-C      │ BUY  │ -$8.00   │ -100%   │
+│ ETH-04APR-1900/1800-PS│ BUY  │ +$45.00  │ +150%   │
+├───────────────────────┼──────┼──────────┼─────────┤
+│ TOTAL                 │      │ +$49.50  │         │
+└───────────────────────┴──────┴──────────┴─────────┘
+
+Win rate: 2/3 (66.7%)
+Average P&L per trade: +$16.50
+Best trade:  ETH PUT_SPREAD (+$45.00, +150% ROI)
+Worst trade: ETH CALL (-$8.00, expired worthless)
+
+Insight: Your MEDIUM risk spread trades outperformed the HIGH risk
+vanilla call. Consider focusing on spreads for better risk-adjusted returns.
+
+OPEN POSITIONS
+┌───────────────────────┬──────┬───────────┬──────────┐
+│ Trade                 │ Side │ Contracts │ Expiry   │
+├───────────────────────┼──────┼───────────┼──────────┤
+│ ETH-18APR-2000-P      │ BUY  │ 0.5       │ Apr 18   │
+└───────────────────────┴──────┴───────────┴──────────┘
+
+Want me to analyze what your open position might settle at?
+```
+
+---
+
 ### "Show me ETH puts"
 
 **User:** Show me ETH puts
@@ -824,66 +1387,76 @@ Agent: No orderbook liquidity at $1900. I'll submit an RFQ.
 ### "I have $50 and I'm bearish on ETH, recommend a strategy"
 
 **Agent's Decision Process:**
-1. User has small collateral ($50) → Consider spreads for efficiency
-2. User is bearish → PUT direction
-3. Check conviction: "Moderately bearish" (didn't say "very bearish")
-4. Recommendation: **PUT_SPREAD**
+1. WebSearch for market news → confirms bearish sentiment
+2. User has small collateral ($50) → Consider spreads for efficiency
+3. User is bearish → PUT direction
+4. Ask risk level → user says "medium"
+5. Recommendation: **PUT_SPREAD** (MEDIUM RISK)
 
 **Agent:**
 ```
-With $50 and a bearish view, I recommend a PUT SPREAD instead of vanilla PUT.
+Market Context:
+• ETH down 3% on regulatory concerns → BEARISH
+• Overall market sentiment weak → confirms bearish view
 
-Why PUT_SPREAD over vanilla PUT?
-┌─────────────────────────────────────────────────────┐
-│ Vanilla PUT ($1900)     │ PUT_SPREAD ($1900/$1800)  │
-├─────────────────────────┼───────────────────────────┤
-│ $50 → ~0.026 contracts  │ $50 → 0.5 contracts       │
-│ Unlimited profit        │ Max profit: $50           │
-│ Lose $50 if wrong       │ Lose $50 if wrong         │
-│ Need big move to profit │ Profit if drops below $1900│
-└─────────────────────────┴───────────────────────────┘
+With $50 and a bearish view at MEDIUM risk, I recommend a PUT SPREAD:
 
-The spread gives you 20x more exposure for the same collateral!
+┌────────────────────────────────────────────────────────┐
+│ Strategy: PUT_SPREAD        Risk: MEDIUM               │
+│ Direction: BEARISH                                     │
+├────────────────────────────────────────────────────────┤
+│ Max Loss:   $50 (your full collateral)                 │
+│ Max Gain:   $50 (spread width - premium)               │
+│ Break-even: ~$1892                                     │
+│ Win Zone:   ETH below $1900 at expiry                  │
+│ Collateral: $50 USDC → 0.5 contracts (20x more than   │
+│             vanilla PUT which gives only 0.026)        │
+└────────────────────────────────────────────────────────┘
 
 Available strikes for tomorrow's expiry:
 • PUT_SPREAD $1950/$1850 - Bid: $12/contract
 • PUT_SPREAD $1900/$1800 - Bid: $8/contract
 
-Which spread would you like? Or prefer vanilla for unlimited upside?
+Which spread would you like?
+
+Want HIGH risk instead? Vanilla PUT gives unlimited profit but only 0.026 contracts.
+Want LOW risk instead? Put Butterfly costs ~$3 with $47 max gain.
 ```
 
 ### "I think ETH will stay around $2000 this week"
 
 **Agent's Decision Process:**
-1. User expects range-bound/neutral market
-2. Check collateral and ask for size
-3. Recommendation: **Butterfly or Condor**
+1. WebSearch for news → no major catalysts, range-bound expected
+2. User expects neutral/range-bound market
+3. Ask risk level → user says "low"
+4. Check collateral: $30 → butterfly is most efficient
+5. Recommendation: **CALL_FLY** (LOW RISK)
 
 **Agent:**
 ```
-For a range-bound view around $2000, I recommend a BUTTERFLY or CONDOR.
+Market Context:
+• No major catalysts this week → NEUTRAL
+• Options expiry Friday with large OI at $2000 → pin risk → NEUTRAL
 
-How much collateral do you want to use?
-```
+With $30 and a neutral view, here's my LOW RISK recommendation:
 
-**User:** "About $30"
+┌────────────────────────────────────────────────────────┐
+│ Strategy: CALL_FLY (Butterfly)   Risk: LOW             │
+│ Direction: NEUTRAL (target $2,050)                     │
+├────────────────────────────────────────────────────────┤
+│ Strikes: 2000 / 2050 / 2100                            │
+│ Max Loss:   ~$5/contract (premium paid)                │
+│ Max Gain:   ~$45/contract (at exactly $2050)           │
+│ Break-even: $2005 - $2095                              │
+│ Collateral: $30 → ~6 contracts                         │
+└────────────────────────────────────────────────────────┘
 
-**Agent:**
-```
-With $30 and a neutral view around $2000, I recommend a CALL BUTTERFLY:
+Why butterfly (LOW risk)?
+• Cheapest way to play range-bound (more contracts per dollar)
+• Max loss is tiny (~$5/contract)
+• If ETH pins near $2050, each contract pays ~$45
 
-ETH-2050-CALL_FLY (strikes: 2000/2050/2100)
-• Cost: ~$5 per contract
-• Max profit: ~$45 per contract (at exactly $2050)
-• $30 gets you: ~6 contracts
-• Break-even range: $2005 - $2095
-
-Why butterfly over condor?
-• Butterfly is cheaper (more contracts per dollar)
-• Condor has wider profit range but costs more
-• For $30, butterfly gives better risk/reward
-
-If you want a wider safety margin, consider a CONDOR with larger collateral.
+Want MEDIUM risk? A Condor ($100+) gives a wider profit zone.
 
 Build this RFQ? (y/n)
 ```
@@ -891,28 +1464,100 @@ Build this RFQ? (y/n)
 ### "I want to sell premium and collect income"
 
 **Agent's Decision Process:**
-1. User wants to sell premium → Income strategy
-2. Ask about market view
-3. If neutral → **IRON_CONDOR**
+1. WebSearch for news → range-bound market expected
+2. User wants to sell premium → Income strategy
+3. Risk level: LOW (income/premium selling = defined risk)
+4. If neutral → **IRON_CONDOR**
 
 **Agent:**
 ```
-For selling premium, I recommend an IRON CONDOR if you're neutral on ETH.
+Market Context:
+• Market consolidating after rally → NEUTRAL
+• No major events this week → supports range-bound play
 
-IRON_CONDOR: Sell both a PUT_SPREAD and CALL_SPREAD
-• Collect premium from both sides
-• Profit if ETH stays in range
-• Defined risk on both tails
+For premium selling, I recommend an IRON CONDOR (LOW RISK):
 
-Current opportunity for ETH-29MAR26:
-IRON_CONDOR strikes: 1800/1900/2100/2200
-• Current ETH: $2000 (right in the middle!)
-• Premium collected: ~$15 per contract
-• Max loss: $85 per contract (if ETH moves beyond wings)
-• Win zone: ETH stays between $1900-$2100
+┌────────────────────────────────────────────────────────┐
+│ Strategy: IRON_CONDOR (sell)     Risk: LOW             │
+│ Direction: NEUTRAL (profit if range-bound)             │
+├────────────────────────────────────────────────────────┤
+│ Strikes: $1800 / $1900 / $2100 / $2200                │
+│ Max Loss:   $85/contract (if ETH exits range)          │
+│ Max Gain:   $15/contract (premium collected)           │
+│ Win Zone:   ETH stays between $1900-$2100              │
+│ Current ETH: $2,000 (right in the middle!)             │
+│ Collateral: ~$100 USDC per contract                    │
+└────────────────────────────────────────────────────────┘
 
-This is a neutral strategy - do you expect ETH to stay range-bound?
+This strategy profits ~60-70% of the time in range-bound markets.
+You collect $15 premium and risk $85 if wrong.
+
+Is ETH likely to stay between $1900-$2100? Let me build this RFQ.
 ```
+
+---
+
+## Output Formatting & UX Guidelines
+
+### Progressive Disclosure
+
+Tailor detail level to the user's experience:
+
+| User Type | How to Detect | What to Show |
+|-----------|---------------|-------------|
+| **New user** | First session, no wallet, asks basic questions | Simplified info, no SDK details, guide step-by-step |
+| **Returning user** | Has wallet, has traded before | Relevant data for their question, skip basics |
+| **Advanced user** | Asks about multi-strike, SDK, specific params | Full technical detail, contract addresses, raw data |
+
+### Formatting Standards
+
+**For strategy recommendations** — Always include the Risk Summary Card (see "Risk-Categorized Strategy Recommendations" section for the full template with all fields: Strategy, Risk Level, Direction, Max Loss, Max Gain, Break-even, Win Zone, Collateral).
+
+**For price/market data** — Use compact tables:
+```
+ETH Options (PUT) — Current Price: $2,050
+┌────────────┬─────────┬────────┬────────┐
+│ Strike     │ Expiry  │ Bid    │ Ask    │
+├────────────┼─────────┼────────┼────────┤
+│ $1,900     │ Apr 25  │ $8.50  │ $12.00 │
+│ $2,000     │ Apr 25  │ $25.00 │ $30.00 │
+└────────────┴─────────┴────────┴────────┘
+```
+
+**For trade confirmations** — Clear summary before execution:
+```
+Trade Summary
+═════════════
+Action: Buy PUT_SPREAD
+Risk Level: MEDIUM
+Strikes: $1900 / $1800
+Expiry: Apr 25, 2026
+Contracts: 1.0
+Cost: ~$15 USDC
+Max Loss: $15 | Max Gain: $85
+
+Confirm? (yes/no)
+```
+
+**For errors** — Never show raw JSON to the user:
+- Translate error codes to plain English
+- Always suggest a corrective action
+- Example: Instead of `{"error": "INSUFFICIENT_ALLOWANCE"}` → "You need to approve USDC spending first. Want me to do that?"
+
+### MCP Tool Usage for Enhanced UX
+
+| Tool | When to Use | Example |
+|------|------------|---------|
+| **WebSearch** | Before every strategy recommendation (fetch market news) | `"crypto market news today"` |
+| **WebFetch** | Drill into a specific article or data source from WebSearch results | Fetch full article content |
+| **context7** | When user asks about SDK features or encounters an unfamiliar error | Resolve `thetanuts-finance/thetanuts-client`, then query docs |
+
+### Context7 for SDK Documentation
+
+When a user asks a technical question about the Thetanuts SDK:
+1. Use context7 `resolve-library-id` to find `thetanuts-finance/thetanuts-client`
+2. Use context7 `query-docs` with the specific topic (e.g., "fillOrder", "WebSocket", "error handling")
+3. Provide accurate, up-to-date answers from official documentation
 
 ---
 
@@ -1007,20 +1652,6 @@ This is a neutral strategy - do you expect ETH to stay range-bound?
 
 ---
 
-## Onboarding
-
-For first-time setup:
-```bash
-bash {baseDir}/scripts/onboard.sh
-```
-
-Then create or import a wallet:
-```bash
-node {baseDir}/scripts/wallet-create.js
-# or
-node {baseDir}/scripts/wallet-import.js --seed-file /path/to/seed.txt
-```
-
 ## Updates
 
 ```bash
@@ -1030,17 +1661,6 @@ bash {baseDir}/scripts/update.sh
 Optional flags:
 - `REFRESH_WDK_DEPS=1` - Refresh dependencies
 - `UPGRADE_WDK_DEPS=1` - Upgrade versions
-
----
-
-## Security Notes
-
-- **DEDICATED WALLET**: Use a dedicated wallet seed for this integration. Never reuse your primary wallet.
-- **LOCAL CUSTODY**: Your seed phrase stays on your machine. The agent never sends it anywhere.
-- **TRANSACTIONS**: Irreversible once broadcast. Always verify before sending.
-- **APPROVALS**: Token approvals allow contracts to spend your tokens. Only approve trusted contracts.
-- **RFQ DEADLINE**: MMs have 45 seconds to respond to RFQs.
-- **GAS**: Ensure wallet has ETH on Base for gas fees.
 
 ---
 

@@ -221,15 +221,23 @@ Beyond vanilla PUT and CALL options, Thetanuts supports advanced multi-strike st
 | Butterfly | CALL | Ascending | `--strikes 2000,2050,2100` |
 | Condor | ALL | Always ascending | `--strikes 1800,1900,2100,2200` |
 
-### Collateral Formulas by Structure
+### Collateral Formulas by Structure (Human-Readable)
 
-| Structure | Formula | Example |
-|-----------|---------|---------|
-| **Vanilla PUT** | `(collateral × 1e8) / strike` | 1900 USDC at $1900 = 1 contract |
-| **INVERSE_CALL** | `collateral / 1e12` | 1 WETH = 1 contract |
-| **Spread** | `collateral / (strike2 - strike1)` | 100 USDC / $100 width = 1 contract |
-| **Butterfly** | `collateral / (middle - lower)` | 50 USDC / $50 wing = 1 contract |
-| **Condor** | `collateral / (strike2 - strike1)` | 100 USDC / $100 inner width = 1 contract |
+These are simplified formulas for quick estimation. For exact on-chain values, use `previewFillOrder()` or `client.utils.calculateCollateral()`.
+
+| Structure | Collateral | Simplified Formula | Example |
+|-----------|-----------|-------------------|---------|
+| **Vanilla PUT** | USDC | `collateral / strike` | $1900 USDC at $1900 strike = 1 contract |
+| **INVERSE_CALL** | WETH | `collateral` (1:1) | 1 WETH = 1 contract |
+| **CALL_SPREAD** | USDC | `collateral / (upper - lower)` | $100 USDC / $100 width = 1 contract |
+| **PUT_SPREAD** | USDC | `collateral / (upper - lower)` | $100 USDC / $100 width = 1 contract |
+| **Butterfly** | USDC | `collateral / (middle - lower)` | $50 USDC / $50 wing = 1 contract |
+| **Condor** | USDC | `collateral / (strike2 - strike1)` | $100 USDC / $100 inner width = 1 contract |
+| **IRON_CONDOR** | USDC | `collateral / max(K2-K1, K4-K3)` | Based on wider wing |
+| **PHYSICAL_CALL** | WETH | Same as INVERSE_CALL | 1 WETH = 1 contract |
+| **PHYSICAL_PUT** | USDC | Same as Vanilla PUT | collateral / strike |
+
+**Key rule:** Only INVERSE_CALL and PHYSICAL_CALL use WETH (base asset). **Everything else uses USDC** — including CALL_SPREAD, CALL_FLY, and CALL_CONDOR.
 
 ### When to Use Each Structure
 
@@ -702,7 +710,9 @@ Step 2: Categorize by status
 Step 3: For each expired position
    - Use the pnlUsd field from get-positions.ts (if available)
    - If pnlUsd is missing, calculate manually:
-     └─> npx tsx scripts/calculate-payout.ts --type <PUT|CALL> --strike <strike> --settlement <settlement_price> --contracts <amount> [--is-buyer]
+     └─> For PUT/CALL: npx tsx scripts/calculate-payout.ts --type <PUT|CALL> --strike <strike> --settlement <settlement_price> --contracts <amount> [--is-buyer]
+     └─> For spreads/butterflies/condors: use client.option.calculatePayout(optionAddress, settlementPrice) on-chain
+         (Note: calculate-payout.ts only supports vanilla PUT/CALL — multi-strike payouts need the SDK on-chain method)
 
 Step 4: Aggregate and present using the template below
 ```
@@ -915,21 +925,106 @@ node scripts/wallet-balance.js --chain base-mainnet --tokens 0x42000000000000000
 node scripts/wallet-balance.js --chain base-mainnet
 ```
 
+### Winner Selection & Payout by Option Type
+
+The **winner** (`winningOfferor`) in an RFQ is always the market maker with the best offer price. Winner selection works the **same way for ALL option types** — PUT, CALL, spreads, butterflies, condors, iron condors, and physical options.
+
+#### Winner Fields in SDK
+
+The winner address appears in three places depending on context:
+
+| Context | Field | When to Use |
+|---------|-------|-------------|
+| **On-chain state** | `QuotationState.currentWinner` | During active RFQ — the current best offeror |
+| **State API** | `StateRfq.winner` | After settlement — the final winning MM |
+| **Settlement event** | `QuotationSettledEvent.winningOfferor` | Emitted when RFQ settles |
+
+#### Payout Formulas by Option Type
+
+| Type | Buyer Payout Formula | Max Payout | Settlement |
+|------|---------------------|------------|------------|
+| **PUT** | `max(strike - price, 0) × contracts` | strike × contracts | Cash (USDC) |
+| **INVERSE_CALL** | `max(price - strike, 0) × contracts` | Unlimited | Cash (WETH) |
+| **CALL_SPREAD** | `min(max(price - K1, 0), K2 - K1) × contracts` | (K2 - K1) × contracts | Cash (USDC) |
+| **PUT_SPREAD** | `min(max(K1 - price, 0), K1 - K2) × contracts` | (K1 - K2) × contracts | Cash (USDC) |
+| **CALL_FLY** | Peaks at middle strike, 0 at wings | wing width × contracts | Cash (USDC) |
+| **PUT_FLY** | Peaks at middle strike, 0 at wings | wing width × contracts | Cash (USDC) |
+| **CALL_CONDOR** | Flat max between K2-K3, tapers at wings | inner width × contracts | Cash (USDC) |
+| **PUT_CONDOR** | Flat max between K2-K3, tapers at wings | inner width × contracts | Cash (USDC) |
+| **IRON_CONDOR** | Profit if price between K2-K3 | premium collected | Cash (USDC) |
+| **PHYSICAL_CALL** | Buyer receives underlying asset | N/A (delivery) | Physical |
+| **PHYSICAL_PUT** | Buyer delivers underlying, receives USDC | N/A (delivery) | Physical |
+
+#### SDK Payout Calculation Support
+
+The SDK utility `client.utils.calculatePayout()` supports these types:
+
+```typescript
+type PayoutType = 'call' | 'put' | 'call_spread' | 'put_spread';
+```
+
+**For butterflies, condors, and iron condors**: use `client.option.calculatePayout(optionAddress, settlementPrice)` which calculates on-chain for any option type, or use `client.option.simulatePayout()` for simulation.
+
+```typescript
+// For vanilla and spreads — use utility function
+const payout = client.utils.calculatePayout({
+  type: 'call_spread',
+  strikes: [2000n * 10n**8n, 2100n * 10n**8n],
+  settlementPrice: 2050n * 10n**8n,
+  numContracts: 1n * 10n**18n,
+});
+
+// For butterflies, condors, iron condors — use on-chain calculation
+const payout = await client.option.calculatePayout(optionAddress, settlementPrice);
+```
+
+#### Settlement Events
+
+When an option settles at expiry, these events are emitted:
+
+| Event | Fields | Description |
+|-------|--------|-------------|
+| `OptionExpiredEvent` | settlementPrice | Oracle records the final price |
+| `OptionPayoutEvent` | buyer, amountPaidOut | Buyer receives payout (if ITM) |
+| `CollateralReturnedEvent` | seller, amountReturned | Seller gets remaining collateral back |
+
+#### Physical Settlement (PHYSICAL_CALL / PHYSICAL_PUT)
+
+Physical options involve actual asset delivery instead of cash settlement:
+
+| Type | Buyer Pays | Buyer Receives | Seller Provides |
+|------|-----------|----------------|-----------------|
+| **PHYSICAL_CALL** | strike × contracts (USDC) | contracts of underlying (WETH) | WETH collateral |
+| **PHYSICAL_PUT** | contracts of underlying (WETH) | strike × contracts (USDC) | USDC collateral |
+
+The SDK has dedicated builders for physical options:
+- `client.optionFactory.buildPhysicalRFQ()`
+- `client.optionFactory.buildPhysicalSpreadRFQ()`
+- `client.optionFactory.buildPhysicalButterflyRFQ()`
+- `client.optionFactory.buildPhysicalCondorRFQ()`
+
 ---
 
 ## Understanding Collateral vs Contracts
 
 When viewing orders, `availableAmount` represents the **maker's collateral budget**, not the number of contracts. The actual number of purchasable contracts depends on the option type and collateral requirements.
 
-### Collateral Formulas by Option Type
+### Collateral Formulas by Option Type (On-Chain)
 
-| Option Type | # Strikes | Formula | Example |
-|-------------|-----------|---------|---------|
-| **Vanilla PUT** | 1 | `(collateral × 1e8) / strike` | 10,000 USDC at $95k strike = 0.105 contracts |
-| **Inverse CALL** | 1 | `collateral / 1e12` | 1 WETH = 1 contract |
-| **SPREAD** | 2 | `(collateral × 1e8) / spreadWidth` | 10,000 USDC / $10k spread = 1 contract |
-| **BUTTERFLY** | 3 | `(collateral × 1e8) / maxSpread` | Based on widest strike range |
-| **CONDOR** | 4 | `(collateral × 1e8) / maxSpread` | Based on widest strike range |
+These are the on-chain formulas using raw decimal values. For practical use, prefer `previewFillOrder()` which handles all conversions automatically.
+
+| Option Type | # Strikes | Collateral | On-Chain Formula | Example |
+|-------------|-----------|-----------|-----------------|---------|
+| **Vanilla PUT** | 1 | USDC | `(collateral × 1e8) / strike` | 10,000 USDC at $95k = 0.105 contracts |
+| **INVERSE_CALL** | 1 | WETH | `collateral / 1e12` | 1 WETH = 1 contract |
+| **CALL_SPREAD** | 2 | USDC | `(collateral × 1e8) / spreadWidth` | 10,000 USDC / $10k = 1 contract |
+| **PUT_SPREAD** | 2 | USDC | `(collateral × 1e8) / spreadWidth` | 10,000 USDC / $10k = 1 contract |
+| **BUTTERFLY** | 3 | USDC | `(collateral × 1e8) / maxSpread` | Based on widest strike range |
+| **CONDOR** | 4 | USDC | `(collateral × 1e8) / maxSpread` | Based on widest strike range |
+| **PHYSICAL_CALL** | 1 | WETH | Same as INVERSE_CALL | 1 WETH = 1 contract |
+| **PHYSICAL_PUT** | 1 | USDC | Same as Vanilla PUT | Same formula |
+
+**IMPORTANT: Only single-strike CALL options (INVERSE_CALL, PHYSICAL_CALL) use WETH collateral. ALL multi-strike structures use USDC, even CALL_SPREAD, CALL_FLY, and CALL_CONDOR.**
 
 ### Using previewFillOrder
 

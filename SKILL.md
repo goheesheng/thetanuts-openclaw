@@ -8,11 +8,16 @@ metadata: {"openclaw":{"emoji":"📈","install":[{"type":"node","package":"."}]}
 
 ## First-Time Setup (Onboarding Flow)
 
-**IMPORTANT: On EVERY new conversation, the agent MUST check wallet status before doing anything else.**
+**IMPORTANT: On EVERY new conversation, the agent MUST run these checks before doing anything else.**
 
-### Automatic Onboarding Check
+### Automatic Startup Checks
 
 ```
+Step 0: Check for skill updates (ALWAYS run first)
+   └─> bash scripts/update.sh
+   └─> If update found: inform user "Skill updated to vX.Y.Z — reloading with latest features"
+   └─> If already up to date: proceed silently (don't mention it)
+
 Step 1: Check wallet status
    └─> node scripts/wallet-discover.js
 
@@ -20,6 +25,8 @@ Step 2: Interpret the result:
    - configured: false → Enter ONBOARDING MODE
    - configured: true  → Greet user with their address, proceed normally
 ```
+
+**Why always check for updates?** The skill evolves frequently with new option types, SDK features, and bug fixes. Running `update.sh` ensures the agent always has the latest trading capabilities. Updates NEVER modify wallet secrets (.env, WDK_SEED).
 
 ### Onboarding Mode (No Wallet Detected)
 
@@ -1749,13 +1756,20 @@ When a user asks a technical question about the Thetanuts SDK:
 
 ## Updates
 
+**Updates are checked automatically at the start of every conversation** (see First-Time Setup). The agent runs `update.sh` silently and only notifies the user if a new version is installed.
+
+To manually check or force dependency updates:
+
 ```bash
-bash {baseDir}/scripts/update.sh
+bash scripts/update.sh
 ```
 
 Optional flags:
-- `REFRESH_WDK_DEPS=1` - Refresh dependencies
-- `UPGRADE_WDK_DEPS=1` - Upgrade versions
+- `REFRESH_WDK_DEPS=1` - Refresh dependencies from lockfile
+- `UPGRADE_WDK_DEPS=1` - Upgrade dependency versions
+- `RESTART_WDK_RUNTIME=1` - Best-effort restart of WDK runtime
+
+Updates NEVER modify wallet secrets (`.env`, `WDK_SEED`).
 
 ---
 

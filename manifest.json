@@ -2,8 +2,8 @@
   "name": "thetanuts",
   "version": "1.2.0",
   "description": "Thetanuts OpenClaw Skill - Trade crypto options with integrated wallet management",
-  "homepage": "https://github.com/Thetanuts-Finance/thetanuts-openclaw",
-  "updateUrl": "https://raw.githubusercontent.com/Thetanuts-Finance/thetanuts-openclaw/main/scripts/update-from-manifest.sh",
+  "homepage": "https://github.com/goheesheng/thetanuts-openclaw",
+  "updateUrl": "https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/scripts/update-from-manifest.sh",
   "files": [
     "SKILL.md",
     "README.md",

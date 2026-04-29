@@ -141,6 +141,19 @@ async function main() {
     const account = await wallet.getAccount(params.index);
     const address = await account.getAddress();
 
+    // Pre-check: ensure wallet has ETH for gas
+    const ethBalance = await account.getBalance();
+    if (ethBalance === 0n) {
+      console.log(JSON.stringify({
+        error: true,
+        message: 'Wallet has 0 ETH on Base. You need ETH for gas fees. Bridge ETH to Base via bridge.base.org.',
+        address,
+        timestamp: new Date().toISOString(),
+      }, null, 2));
+      wallet.dispose?.();
+      process.exit(1);
+    }
+
     console.error('Signing and broadcasting transaction...');
 
     // Build transaction object

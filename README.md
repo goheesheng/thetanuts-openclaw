@@ -33,7 +33,7 @@ curl -s https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/REA
 
 ```bash
 cd ~/.openclaw/workspace/skills
-git clone https://github.com/Thetanuts-Finance/thetanuts-openclaw.git thetanuts
+git clone https://github.com/goheesheng/thetanuts-openclaw.git thetanuts
 ```
 
 ### Step 2: Run Onboarding
@@ -59,7 +59,7 @@ node scripts/wallet-create.js
 node scripts/wallet-import.js --seed-file /path/to/seed.txt
 ```
 
-**⚠️ IMPORTANT**: Use a DEDICATED wallet for this integration. Never reuse your primary wallet seed phrase.
+**⚠️ IMPORTANT**: Use a DEDICATED wallet for this integration. Never reuse your primary wallet seed phrase. Write your seed phrase on paper and store it offline (not in a text file, not in a chat, not in email).
 
 ### Step 4: Reload OpenClaw
 
@@ -67,6 +67,18 @@ Start a new session to load the skill:
 ```
 /new
 ```
+
+The agent will automatically detect your wallet, show your address and balances, and display current ETH/BTC option prices. You're ready to trade.
+
+### Step 5: Fund Your Wallet
+
+Before trading, you need tokens on Base network:
+
+- **ETH** (gas fees) - Bridge via [bridge.base.org](https://bridge.base.org)
+- **USDC** (for PUT options) - `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
+- **WETH** (for CALL options) - `0x4200000000000000000000000000000000000006`
+
+Once funded, just tell the agent what you want: "Show me ETH puts" or "Recommend a strategy."
 
 ## Updates
 

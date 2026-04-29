@@ -240,6 +240,33 @@ async function main() {
 
     const walletAddress = await signer.getAddress();
 
+    // Pre-check: ensure wallet has ETH for gas
+    const ethBalance = await provider.getBalance(walletAddress);
+    if (ethBalance === 0n) {
+      console.log(JSON.stringify({
+        error: true,
+        message: 'Wallet has 0 ETH on Base. You need ETH for gas fees. Bridge ETH to Base via bridge.base.org.',
+        address: walletAddress,
+        timestamp: new Date().toISOString(),
+      }, null, 2));
+      process.exit(1);
+    }
+
+    // Pre-check: ensure wallet has enough collateral tokens
+    const tokenBalance = await client.erc20.getBalance(collateralTokenAddress, walletAddress);
+    if (tokenBalance < collateralAmount) {
+      const needed = Number(collateralAmount - tokenBalance) / (10 ** tokenInfo.decimals);
+      console.log(JSON.stringify({
+        error: true,
+        message: `Insufficient ${tokenInfo.symbol} balance. You need ${needed.toFixed(tokenInfo.decimals > 6 ? 6 : 2)} more ${tokenInfo.symbol}. Current balance is less than the required collateral.`,
+        token: collateralTokenAddress,
+        tokenSymbol: tokenInfo.symbol,
+        address: walletAddress,
+        timestamp: new Date().toISOString(),
+      }, null, 2));
+      process.exit(1);
+    }
+
     // Check token allowance and approve if needed
     const optionBookAddress = client.chainConfig.contracts.optionBook;
     const currentAllowance = await client.erc20.getAllowance(

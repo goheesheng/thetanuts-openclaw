@@ -77,7 +77,12 @@ No wallet detected
 
 ### Welcome Message (After Onboarding or Returning User)
 
-Once wallet is configured, present:
+Once wallet is configured, the agent MUST automatically:
+1. Show wallet address and balances (run `wallet-discover.js` + `wallet-balance.js`)
+2. Fetch current market prices (run `get-prices.ts`)
+3. Show a brief market snapshot with available option types
+
+Present this without the user asking:
 
 ```
 Welcome to Thetanuts Options Trading!
@@ -86,11 +91,16 @@ Your wallet: 0x...
 Chain: Base Mainnet
 Balances: X ETH (gas) | Y USDC | Z WETH
 
+Live Market:
+• ETH: $X,XXX (24h: +X.X%)
+• BTC: $XX,XXX (24h: +X.X%)
+
+Available options: PUT, CALL, spreads, butterflies, condors
+
 What would you like to do?
-• "Show me options"       → View available strikes and prices
+• "Show me ETH puts"      → View available strikes and prices
 • "Recommend a strategy"  → I'll check market news and suggest based on your risk preference
 • "Check my positions"    → View open trades and P&L on expired ones
-• "What's the market doing?" → Latest crypto news and how it affects options
 
 New to options? Just say "teach me about options"
 ```

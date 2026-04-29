@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Update source URL (can be overridden via env var)
-UPDATE_SOURCE_URL="${UPDATE_SOURCE_URL:-https://raw.githubusercontent.com/Thetanuts-Finance/thetanuts-openclaw/main/manifest.json}"
+UPDATE_SOURCE_URL="${UPDATE_SOURCE_URL:-https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/manifest.json}"
 
 echo "🥜 Thetanuts OpenClaw - Update Check"
 echo "===================================="

@@ -182,6 +182,19 @@ async function main() {
     const tokenInfo = KNOWN_TOKENS[params.token] || { symbol: 'UNKNOWN', decimals: 18 };
     const spenderName = KNOWN_SPENDERS[params.spender] || params.spender;
 
+    // Pre-check: ensure wallet has ETH for gas
+    const ethBalance = await account.getBalance();
+    if (ethBalance === 0n) {
+      console.log(JSON.stringify({
+        error: true,
+        message: 'Wallet has 0 ETH on Base. You need ETH for gas fees. Bridge ETH to Base via bridge.base.org.',
+        address,
+        timestamp: new Date().toISOString(),
+      }, null, 2));
+      wallet.dispose?.();
+      process.exit(1);
+    }
+
     console.error(`Approving ${tokenInfo.symbol} spending for ${spenderName}...`);
 
     // Call WDK approve method

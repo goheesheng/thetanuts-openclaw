@@ -131,12 +131,21 @@ console.log('Active chain:', process.env.WDK_ACTIVE_CHAIN || 'base-mainnet');
 SERVEREOF
 echo -e "${GREEN}✓ Created server.js scaffold${NC}"
 
-# Install dependencies
+# Install project-level dependencies (for wallet scripts)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 echo ""
-echo "Installing dependencies (this may take a minute)..."
+echo "Installing project dependencies..."
+cd "$PROJECT_DIR"
+npm install --silent 2>&1 | tail -5
+echo -e "${GREEN}✓ Project dependencies installed${NC}"
+
+# Install WDK MCP runtime dependencies
+echo ""
+echo "Installing WDK MCP runtime dependencies..."
 cd "$WDK_MCP_DIR"
 npm install --silent 2>&1 | tail -5
-echo -e "${GREEN}✓ Dependencies installed${NC}"
+echo -e "${GREEN}✓ WDK MCP dependencies installed${NC}"
 
 # Verify installation
 echo ""

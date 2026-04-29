@@ -354,17 +354,17 @@ User wants a strategy recommendation
 Every strategy recommendation MUST include this card:
 
 ```
-┌────────────────────────────────────────────────┐
-│ Strategy: [STRATEGY NAME]                      │
-│ Risk Level: [LOW / MEDIUM / HIGH]              │
-│ Direction: [BULLISH / BEARISH / NEUTRAL]       │
-├────────────────────────────────────────────────┤
-│ Max Loss:   $[amount] ([description])          │
-│ Max Gain:   $[amount] ([description])          │
-│ Break-even: $[price]                           │
-│ Win Zone:   Price between $[low] and $[high]   │
-│ Collateral: [amount] [token]                   │
-└────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Strategy:  [STRATEGY NAME]                         │
+│ Risk:      [LOW / MEDIUM / HIGH]                   │
+│ Direction: [BULLISH / BEARISH / NEUTRAL]           │
+├────────────────────────────────────────────────────┤
+│ Max Loss:  $[amount] ([description])               │
+│ Max Gain:  $[amount] ([description])               │
+│ Break-even: $[price]                               │
+│ Win Zone:  Price between $[low] and $[high]        │
+│ Collateral: [amount] [token]                       │
+└────────────────────────────────────────────────────┘
 ```
 
 #### Collateral Efficiency Comparison
@@ -1371,30 +1371,30 @@ HIGH: Vanilla Call — unlimited upside if Fed sparks a rally
 ```
 Agent: Here are the LOW RISK strategies available right now:
 
-┌────────────────────────────────────────────────────────┐
-│ Strategy: Iron Condor (ETH)                            │
-│ Risk Level: LOW                                        │
-│ Direction: NEUTRAL                                     │
-├────────────────────────────────────────────────────────┤
-│ Strikes: $1800 / $1900 / $2100 / $2200                │
-│ Max Loss:   $85/contract                               │
-│ Max Gain:   $15/contract (premium collected)           │
-│ Win Zone:   ETH stays between $1900-$2100              │
-│ Current ETH: $2,050 (right in the sweet spot!)         │
-│ Collateral: ~$100 USDC per contract                    │
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Strategy:  Iron Condor (ETH)                       │
+│ Risk:      LOW                                     │
+│ Direction: NEUTRAL                                 │
+├────────────────────────────────────────────────────┤
+│ Strikes:   $1800 / $1900 / $2100 / $2200           │
+│ Max Loss:  $85/contract                            │
+│ Max Gain:  $15/contract (premium collected)        │
+│ Win Zone:  ETH stays between $1900-$2100           │
+│ Current:   ETH $2,050 (right in the sweet spot!)   │
+│ Collateral: ~$100 USDC per contract                │
+└────────────────────────────────────────────────────┘
 
-┌────────────────────────────────────────────────────────┐
-│ Strategy: Put Butterfly (ETH)                          │
-│ Risk Level: LOW                                        │
-│ Direction: NEUTRAL (target $2,000)                     │
-├────────────────────────────────────────────────────────┤
-│ Strikes: $1950 / $2000 / $2050                         │
-│ Max Loss:   ~$3/contract (premium paid)                │
-│ Max Gain:   ~$47/contract (if ETH settles at $2,000)   │
-│ Win Zone:   ETH settles near $2,000                    │
-│ Collateral: ~$50 USDC per contract                     │
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Strategy:  Put Butterfly (ETH)                     │
+│ Risk:      LOW                                     │
+│ Direction: NEUTRAL (target $2,000)                 │
+├────────────────────────────────────────────────────┤
+│ Strikes:   $1950 / $2000 / $2050                   │
+│ Max Loss:  ~$3/contract (premium paid)             │
+│ Max Gain:  ~$47/contract (if pinned at $2,000)     │
+│ Win Zone:  ETH settles near $2,000                 │
+│ Collateral: ~$50 USDC per contract                 │
+└────────────────────────────────────────────────────┘
 
 Which strategy interests you? Or want to see MEDIUM or HIGH risk options?
 ```
@@ -1503,17 +1503,18 @@ Market Context:
 
 With $50 and a bearish view at MEDIUM risk, I recommend a PUT SPREAD:
 
-┌────────────────────────────────────────────────────────┐
-│ Strategy: PUT_SPREAD        Risk: MEDIUM               │
-│ Direction: BEARISH                                     │
-├────────────────────────────────────────────────────────┤
-│ Max Loss:   $50 (your full collateral)                 │
-│ Max Gain:   $50 (spread width - premium)               │
-│ Break-even: ~$1892                                     │
-│ Win Zone:   ETH below $1900 at expiry                  │
-│ Collateral: $50 USDC → 0.5 contracts (20x more than   │
-│             vanilla PUT which gives only 0.026)        │
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Strategy:  PUT_SPREAD                              │
+│ Risk:      MEDIUM                                  │
+│ Direction: BEARISH                                 │
+├────────────────────────────────────────────────────┤
+│ Max Loss:  $50 (your full collateral)              │
+│ Max Gain:  $50 (spread width - premium)            │
+│ Break-even: ~$1892                                 │
+│ Win Zone:  ETH below $1900 at expiry               │
+│ Collateral: $50 USDC -> 0.5 contracts              │
+│             (20x more than vanilla PUT at 0.026)   │
+└────────────────────────────────────────────────────┘
 
 Available strikes for tomorrow's expiry:
 • PUT_SPREAD $1950/$1850 - Bid: $12/contract
@@ -1542,16 +1543,17 @@ Market Context:
 
 With $30 and a neutral view, here's my LOW RISK recommendation:
 
-┌────────────────────────────────────────────────────────┐
-│ Strategy: CALL_FLY (Butterfly)   Risk: LOW             │
-│ Direction: NEUTRAL (target $2,050)                     │
-├────────────────────────────────────────────────────────┤
-│ Strikes: 2000 / 2050 / 2100                            │
-│ Max Loss:   ~$5/contract (premium paid)                │
-│ Max Gain:   ~$45/contract (at exactly $2050)           │
-│ Break-even: $2005 - $2095                              │
-│ Collateral: $30 → ~6 contracts                         │
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Strategy:  CALL_FLY (Butterfly)                    │
+│ Risk:      LOW                                     │
+│ Direction: NEUTRAL (target $2,050)                 │
+├────────────────────────────────────────────────────┤
+│ Strikes:   2000 / 2050 / 2100                      │
+│ Max Loss:  ~$5/contract (premium paid)             │
+│ Max Gain:  ~$45/contract (at exactly $2050)        │
+│ Break-even: $2005 - $2095                          │
+│ Collateral: $30 -> ~6 contracts                    │
+└────────────────────────────────────────────────────┘
 
 Why butterfly (LOW risk)?
 • Cheapest way to play range-bound (more contracts per dollar)
@@ -1579,17 +1581,18 @@ Market Context:
 
 For premium selling, I recommend an IRON CONDOR (LOW RISK):
 
-┌────────────────────────────────────────────────────────┐
-│ Strategy: IRON_CONDOR (sell)     Risk: LOW             │
-│ Direction: NEUTRAL (profit if range-bound)             │
-├────────────────────────────────────────────────────────┤
-│ Strikes: $1800 / $1900 / $2100 / $2200                │
-│ Max Loss:   $85/contract (if ETH exits range)          │
-│ Max Gain:   $15/contract (premium collected)           │
-│ Win Zone:   ETH stays between $1900-$2100              │
-│ Current ETH: $2,000 (right in the middle!)             │
-│ Collateral: ~$100 USDC per contract                    │
-└────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Strategy:  IRON_CONDOR (sell)                      │
+│ Risk:      LOW                                     │
+│ Direction: NEUTRAL (profit if range-bound)         │
+├────────────────────────────────────────────────────┤
+│ Strikes:   $1800 / $1900 / $2100 / $2200           │
+│ Max Loss:  $85/contract (if ETH exits range)       │
+│ Max Gain:  $15/contract (premium collected)        │
+│ Win Zone:  ETH stays between $1900-$2100           │
+│ Current:   ETH $2,000 (right in the middle!)       │
+│ Collateral: ~$100 USDC per contract                │
+└────────────────────────────────────────────────────┘
 
 This strategy profits ~60-70% of the time in range-bound markets.
 You collect $15 premium and risk $85 if wrong.
@@ -1612,6 +1615,14 @@ Tailor detail level to the user's experience:
 | **Advanced user** | Asks about multi-strike, SDK, specific params | Full technical detail, contract addresses, raw data |
 
 ### Formatting Standards
+
+**ASCII Table Alignment Rules (CRITICAL):**
+- The `┌───┐` top border, `├───┤` divider, and `└───┘` bottom border MUST all be the **exact same width**
+- Every content line `│ ... │` MUST have the right `│` aligned exactly under the `┐` corner
+- Count characters carefully: if the border is 54 `─` chars wide (56 total with `┌┐`), every content line must be exactly 54 chars between the `│` borders
+- Pad content lines with spaces on the right so the closing `│` always aligns
+- If content is too long for the box, shorten it or wrap to a new line (indented, still inside the `│` borders)
+- Use light box-drawing only: `┌ ┐ └ ┘ ─ │ ├ ┤ ┼ ┬ ┴` (never heavy/double: `═ ║ ╔`)
 
 **For strategy recommendations** — Always include the Risk Summary Card (see "Risk-Categorized Strategy Recommendations" section for the full template with all fields: Strategy, Risk Level, Direction, Max Loss, Max Gain, Break-even, Win Zone, Collateral).
 

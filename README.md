@@ -2,13 +2,25 @@
 
 OpenClaw skill for trading crypto options on [Thetanuts Finance](https://thetanuts.finance) with integrated wallet management.
 
+## For AI Agents
+
+Before using this skill, learn the full codebase by fetching `SKILL.md` (the agent instruction set) and `README.md` from the repo:
+
+```bash
+curl -s https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/SKILL.md
+curl -s https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/README.md
+```
+
+`SKILL.md` contains the complete agent instruction set: onboarding flows, trading workflows, strategy recommendation logic, risk-tiered decision trees, SDK reference, contract addresses, and example conversations. Read it fully before assisting users.
+
 ## Features
 
 - **Wallet Management**: Create and import EVM/Solana wallets using Tether WDK
 - **Balance Queries**: Check native (ETH/SOL) and token balances (USDC, WETH, cbBTC)
 - **Transaction Execution**: Approve tokens and send transactions directly
-- **Options Trading**: Get MM pricing, build RFQs, fetch orderbook
-- **Position Tracking**: Check user positions and calculate payoffs
+- **Options Trading**: Orderbook fills, RFQ lifecycle, MM pricing, multi-strike structures (spreads, butterflies, condors)
+- **Position Tracking**: Check user positions, calculate payoffs, portfolio ROI
+- **Market Intelligence**: News-informed strategy recommendations with risk-tiered suggestions
 
 ## Prerequisites
 
@@ -34,7 +46,8 @@ bash scripts/onboard.sh
 This will:
 - Check prerequisites (node, npm)
 - Create WDK MCP runtime at `~/.openclaw/wdk-mcp`
-- Install all required dependencies
+- Install project dependencies (for wallet scripts like `wallet-create.js`)
+- Install WDK MCP runtime dependencies
 
 ### Step 3: Create or Import Wallet
 
@@ -175,6 +188,9 @@ npx tsx scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A6410688
 | `get-positions.ts` | Get user positions by wallet address |
 | `build-rfq.ts` | Build RFQ transaction data |
 | `fetch-orders.ts` | Fetch orderbook with filters |
+| `check-orderbook.ts` | Check orderbook liquidity before trading |
+| `fill-order.ts` | Fill an existing orderbook order |
+| `check-rfq-fill.ts` | Verify RFQ fill status after submission |
 | `calculate-payout.ts` | Calculate option payout at settlement |
 
 ### Get Option Pricing
@@ -206,19 +222,25 @@ npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 
    npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
    ```
 
-4. **View available options**:
+4. **Check orderbook first** (always check liquidity before choosing a method):
    ```bash
-   npx tsx scripts/get-mm-pricing.ts ETH --type PUT
+   npx tsx scripts/check-orderbook.ts --underlying ETH --type PUT --strike 1900 --expiry 1774684800 --direction sell
    ```
 
-5. **Build RFQ transaction**:
+5a. **If orderbook has liquidity** - fill directly:
    ```bash
-   npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 1774684800 --contracts 0.1 --direction buy
+   npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute --wait
    ```
 
-6. **Send transaction** using `to` and `data` from step 5:
+5b. **If no orderbook liquidity** - submit an RFQ:
    ```bash
-   npx tsx scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "..." --wait
+   npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry 1774684800 --contracts 0.1 --direction buy
+   npx tsx scripts/send-transaction.ts --to <from-build-rfq> --data <from-build-rfq> --seed "..." --wait
+   ```
+
+6. **Verify fill** (for RFQ trades):
+   ```bash
+   npx tsx scripts/check-rfq-fill.ts --address <wallet> --ticker <expected> --since <submission_timestamp>
    ```
 
 ## Configuration

@@ -29,7 +29,17 @@ curl -s https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/REA
 
 ## Installation
 
-### Step 1: Clone to OpenClaw workspace
+### Option A: Install from ClawHub (recommended)
+
+```bash
+clawhub install thetanuts
+```
+
+Then skip to Step 2 below.
+
+View on ClawHub: [clawhub.ai/goheesheng/thetanuts](https://clawhub.ai/goheesheng/thetanuts)
+
+### Option B: Clone from GitHub
 
 ```bash
 cd ~/.openclaw/workspace/skills
@@ -288,6 +298,7 @@ MIT
 
 ## Links
 
+- [ClawHub: thetanuts](https://clawhub.ai/goheesheng/thetanuts)
 - [Thetanuts Finance](https://thetanuts.finance)
 - [Thetanuts SDK](https://github.com/Thetanuts-Finance/thetanuts-sdk)
 - [Tether WDK](https://docs.wdk.tether.io)

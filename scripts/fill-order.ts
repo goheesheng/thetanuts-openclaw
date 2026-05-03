@@ -282,16 +282,14 @@ async function main() {
         message: `Approving ${tokenInfo.symbol} for OptionBook...`,
       }));
 
-      const approveTx = await client.erc20.approve(
+      // SDK approve() waits internally and returns a receipt, not a tx response
+      const approveReceipt = await client.erc20.approve(
         collateralTokenAddress,
         optionBookAddress,
         collateralAmount * 10n // Approve 10x for future fills
       );
 
-      if (params.wait) {
-        await approveTx.wait();
-      }
-      approvalTx = approveTx.hash;
+      approvalTx = approveReceipt.hash;
     }
 
     // Fill the order
@@ -300,12 +298,8 @@ async function main() {
       message: 'Executing order fill...',
     }));
 
-    const fillTx = await client.optionBook.fillOrder(order, collateralAmount, params.referrer);
-
-    let receipt = null;
-    if (params.wait) {
-      receipt = await fillTx.wait();
-    }
+    // SDK fillOrder() waits internally and returns a receipt, not a tx response
+    const fillReceipt = await client.optionBook.fillOrder(order, collateralAmount, params.referrer);
 
     console.log(JSON.stringify({
       success: true,
@@ -313,9 +307,9 @@ async function main() {
       execution: {
         walletAddress,
         approvalTx,
-        fillTx: fillTx.hash,
-        blockNumber: receipt?.blockNumber,
-        gasUsed: receipt?.gasUsed?.toString(),
+        fillTx: fillReceipt.hash,
+        blockNumber: fillReceipt.blockNumber,
+        gasUsed: fillReceipt.gasUsed?.toString(),
       },
       timestamp: new Date().toISOString(),
     }, null, 2));

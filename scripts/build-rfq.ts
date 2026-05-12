@@ -236,10 +236,10 @@ async function main() {
 
     // Build RFQ request
     const rfqRequest = client.optionFactory.buildRFQRequest({
-      requester: requesterAddress,
+      requester: requesterAddress as `0x${string}`,
       underlying: params.underlying,
       optionType: params.type,
-      ...(strikeCount === 1 ? { strike: strikes[0] } : { strikes }),
+      strikes: strikeCount === 1 ? strikes[0] : strikes,
       expiry: params.expiry,
       numContracts: params.contracts,
       isLong: params.direction === 'buy',
@@ -286,7 +286,7 @@ async function main() {
       transaction: {
         to: encoded.to,
         data: encoded.data,
-        value: encoded.value?.toString() || '0',
+        value: '0',
       },
       instructions: [
         'This transaction data is ready to be signed and sent.',

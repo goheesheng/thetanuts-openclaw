@@ -7,12 +7,17 @@
 - `scripts/onboard.sh` - Installs deps at project root AND `~/.openclaw/wdk-mcp/`
 - `manifest.json` - ClawHub publishing metadata
 
-## SDK Quirks (@thetanuts-finance/thetanuts-client)
+## SDK Quirks (@thetanuts-finance/thetanuts-client, ^0.2.3)
 - `client.erc20.approve()` returns a TransactionReceipt, NOT TransactionResponse. Do not call `.wait()` on it.
 - `client.optionBook.fillOrder()` same — returns receipt, already waited internally.
 - `client.erc20.getBalance(token, address)` returns `Promise<bigint>`.
 - `client.erc20.getAllowance(token, owner, spender)` returns `Promise<bigint>`.
 - Strikes use 8 decimals internally. USDC uses 6, WETH uses 18.
+- `OrderWithSignature` has NO root-level `collateralToken` field. Use `order.rawApiData?.collateral` or `order.order?.collateralToken` (both are address strings).
+- `Order.strikePrice` is deprecated. Use `order.order.strikes?.[0]` going forward.
+- `RFQBuilderParams.requester` is typed `\`0x${string}\``. Cast string addresses with `as \`0x${string}\``.
+- `RFQBuilderParams.strikes` is `number | number[]`. The deprecated `strike` field still works but emits a warning — prefer passing `strikes: single` or `strikes: [...]`.
+- `optionFactory.encodeRequestForQuotation()` returns `{ to, data }` only — no `value` field. RFQ transactions are value-zero.
 
 ## Dependencies
 - `@scure/bip39` must be a direct dependency — wallet scripts import it directly, not via WDK.

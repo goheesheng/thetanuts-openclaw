@@ -10,7 +10,7 @@
  */
 
 import { ThetanutsClient } from '@thetanuts-finance/thetanuts-client';
-import { JsonRpcProvider, Wallet } from 'ethers';
+import { JsonRpcProvider, Wallet, HDNodeWallet } from 'ethers';
 
 const RPC_URL = process.env.THETANUTS_RPC_URL || 'https://mainnet.base.org';
 const CHAIN_ID = 8453;
@@ -112,7 +112,7 @@ async function main() {
   // For preview, we don't need a signer
   // For execute, we create a wallet from seed
   let client: ThetanutsClient;
-  let signer: Wallet | undefined;
+  let signer: Wallet | HDNodeWallet | undefined;
 
   if (params.execute) {
     signer = Wallet.fromPhrase(params.seed, provider);
@@ -157,7 +157,8 @@ async function main() {
 
     // Extract order details
     const isCall = order.rawApiData?.isCall ?? true;
-    const strike = order.order?.strikePrice ? Number(order.order.strikePrice) / 1e8 : 0;
+    const strikeRaw = order.order?.strikes?.[0] ?? order.order?.strikePrice;
+    const strike = strikeRaw ? Number(strikeRaw) / 1e8 : 0;
     const expiry = order.order?.expiry ? Number(order.order.expiry) : 0;
     const price = order.order?.price ? Number(order.order.price) / 1e8 : 0;
     const isBuyer = order.order?.isBuyer ?? false;
@@ -177,7 +178,7 @@ async function main() {
     }
 
     // Determine collateral token and decimals
-    const collateralTokenAddress = order.collateralToken?.address || client.chainConfig.tokens.USDC.address;
+    const collateralTokenAddress = order.rawApiData?.collateral || order.order?.collateralToken || client.chainConfig.tokens.USDC.address;
     const tokenInfo = KNOWN_TOKENS[collateralTokenAddress] || { symbol: 'UNKNOWN', decimals: 18 };
     const collateralDecimals = tokenInfo.decimals;
 

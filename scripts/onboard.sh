@@ -99,7 +99,7 @@ cat > "$PACKAGE_JSON" << 'PKGEOF'
     "@tetherto/wdk-wallet-evm": "^1.0.0-beta.10",
     "@tetherto/wdk-wallet-solana": "^1.0.0-beta.5",
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@thetanuts-finance/thetanuts-client": "^0.1.0",
+    "@thetanuts-finance/thetanuts-client": "^0.2.3",
     "@scure/bip39": "^1.5.4",
     "dotenv": "^16.4.5"
   }

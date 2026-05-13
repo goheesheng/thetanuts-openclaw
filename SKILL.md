@@ -691,7 +691,7 @@ Step 3: Build RFQ with your terms
    └─> npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry 1774684800 --contracts 0.1 --direction buy
 
 Step 4: Approve tokens (if selling/first time)
-   └─> npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+   └─> npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x8118daD971dEbffB49B9280047659174128A8B94 --max --seed "..." --wait
 
 Step 5: Send RFQ transaction
    └─> npx tsx scripts/send-transaction.ts --to <from step 3> --data <from step 3> --seed "..." --wait
@@ -1731,8 +1731,8 @@ When a user asks a technical question about the Thetanuts SDK:
 
 | Contract | Address |
 |----------|---------|
-| **OptionBook** | `0xd58b814C7Ce700f251722b5555e25aE0fa8169A1` |
-| **OptionFactory** | `0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5` |
+| **OptionBook** | `0x1bDff855d6811728acaDC00989e79143a2bdfDed` |
+| **OptionFactory** | `0x8118daD971dEbffB49B9280047659174128A8B94` |
 
 ### Tokens
 

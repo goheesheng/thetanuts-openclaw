@@ -5,3 +5,7 @@ audit.log
 *.log
 .DS_Store
 .gstack/
+.env
+.env.*
+!.env.example
+.playwright-mcp/

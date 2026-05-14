@@ -4,14 +4,15 @@ OpenClaw skill for trading crypto options on [Thetanuts Finance](https://thetanu
 
 ## For AI Agents
 
-Before using this skill, learn the full codebase by fetching `SKILL.md` (the agent instruction set) and `README.md` from the repo:
+The agent instruction set lives in the locally installed `SKILL.md` (the file
+ClawHub places next to this README). Read it from the install directory — do
+not fetch it from the internet, since remote files can change after install
+and ClawHub's security review only covers the published artifact.
 
-```bash
-curl -s https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/SKILL.md
-curl -s https://raw.githubusercontent.com/goheesheng/thetanuts-openclaw/main/README.md
-```
-
-`SKILL.md` contains the complete agent instruction set: onboarding flows, trading workflows, strategy recommendation logic, risk-tiered decision trees, SDK reference, contract addresses, and example conversations. Read it fully before assisting users.
+`SKILL.md` contains the complete agent instruction set: onboarding flows,
+trading workflows, strategy recommendation logic, risk-tiered decision trees,
+SDK reference, contract addresses, and example conversations. Read it fully
+before assisting users.
 
 ## Features
 
@@ -109,10 +110,17 @@ Optional flags:
 Once installed, you can ask questions like:
 
 - "Create a new EVM wallet for me"
-- "Check my wallet balance" (provide seed phrase)
+- "Check my wallet balance"
 - "Show me ETH put options"
 - "I want to buy 0.1 ETH 2000 put expiring March 28"
 - "Check positions for 0x..."
+
+**Seed handling**: The skill reads your seed only from the `WDK_SEED` value in
+`~/.openclaw/wdk-mcp/.env` (written there once by `wallet-create.js` or
+`wallet-import.js`). The scripts intentionally refuse to accept a seed phrase
+as a command-line argument — argv is visible to other processes via `ps`,
+shell history, and terminal logs, so any script that requires the seed loads
+it from the environment instead.
 
 ## Wallet Management
 
@@ -190,15 +198,27 @@ The following TypeScript-based commands are available for backward compatibility
 
 ### Approve Token Spending
 
+Approval scripts read the seed from the `WDK_SEED` environment variable
+(loaded from `~/.openclaw/wdk-mcp/.env`). Passing a seed phrase as a CLI
+argument is rejected at script entry — see the global seed-handling note
+above.
+
 ```bash
-# Approve max USDC for Thetanuts
-npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+# Approve an exact USDC amount for Thetanuts (preferred over --max)
+npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --amount 100 --wait
+
+# Unlimited approvals require explicit confirmation; the spender must also be
+# on the Thetanuts allowlist (override with --i-understand-risk only after
+# independently verifying the address).
+npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --confirm-max --wait
 ```
 
 ### Send Transaction
 
 ```bash
-npx tsx scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "..." --wait
+npx tsx scripts/send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --wait
 ```
 
 ## Trading Scripts
@@ -239,9 +259,9 @@ npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 
    node scripts/wallet-balance.js --chain base-mainnet --tokens 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
    ```
 
-3. **Approve USDC** for Thetanuts (one-time per token):
+3. **Approve USDC** for Thetanuts (one-time per token; prefer an exact amount):
    ```bash
-   npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --max --seed "..." --wait
+   npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --amount 100 --wait
    ```
 
 4. **Check orderbook first** (always check liquidity before choosing a method):
@@ -251,13 +271,13 @@ npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 2000 --expiry 
 
 5a. **If orderbook has liquidity** - fill directly:
    ```bash
-   npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute --wait
+   npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --execute --wait
    ```
 
 5b. **If no orderbook liquidity** - submit an RFQ:
    ```bash
    npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry 1774684800 --contracts 0.1 --direction buy
-   npx tsx scripts/send-transaction.ts --to <from-build-rfq> --data <from-build-rfq> --seed "..." --wait
+   npx tsx scripts/send-transaction.ts --to <from-build-rfq> --data <from-build-rfq> --wait
    ```
 
 6. **Verify fill** (for RFQ trades):

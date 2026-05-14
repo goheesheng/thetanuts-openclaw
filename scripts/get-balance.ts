@@ -1,17 +1,14 @@
 #!/usr/bin/env npx tsx
 /**
- * Get wallet balance (native and tokens)
- * Usage: npx tsx get-balance.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>] [--token <address>]
+ * Get wallet balance (native and tokens).
+ * Seed is read from WDK_SEED env var (or --seed-file) — never from argv.
  *
- * Example:
- *   npx tsx get-balance.ts --chain evm --seed "word1 word2 ... word12"
- *   npx tsx get-balance.ts --chain evm --seed "..." --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+ * Usage: WDK_SEED="..." npx tsx get-balance.ts --chain <evm|solana> [--index <n>] [--token <address>]
  */
 
-import { validateMnemonic } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english';
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm';
 import WalletManagerSolana from '@tetherto/wdk-wallet-solana';
+import { loadSeed } from './lib/load-seed';
 
 const EVM_RPC_URL = process.env.THETANUTS_RPC_URL || 'https://mainnet.base.org';
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
@@ -26,7 +23,6 @@ const KNOWN_TOKENS: Record<string, { symbol: string; decimals: number }> = {
 
 interface GetBalanceParams {
   chain: 'evm' | 'solana';
-  seed: string;
   index: number;
   token?: string;
 }
@@ -44,9 +40,6 @@ function parseArgs(args: string[]): GetBalanceParams {
           params.chain = chain;
         }
         break;
-      case '--seed':
-        params.seed = args[++i];
-        break;
       case '--index':
         params.index = parseInt(args[++i]) || 0;
         break;
@@ -56,18 +49,16 @@ function parseArgs(args: string[]): GetBalanceParams {
     }
   }
 
-  // Validate required params
   const missing: string[] = [];
   if (!params.chain) missing.push('--chain (evm|solana)');
-  if (!params.seed) missing.push('--seed "<seed phrase>"');
 
   if (missing.length > 0) {
     console.error(JSON.stringify({
       error: true,
       message: 'Missing required parameters',
       missing,
-      usage: 'npx tsx get-balance.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>] [--token <address>]',
-      example: 'npx tsx get-balance.ts --chain evm --seed "word1 word2 ... word12"',
+      usage: 'WDK_SEED="..." npx tsx get-balance.ts --chain <evm|solana> [--index <number>] [--token <address>]',
+      example: 'WDK_SEED="word1 word2 ... word12" npx tsx get-balance.ts --chain evm',
       commonTokens: {
         USDC: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
         WETH: '0x4200000000000000000000000000000000000006',
@@ -78,18 +69,6 @@ function parseArgs(args: string[]): GetBalanceParams {
     process.exit(1);
   }
 
-  // Validate seed phrase
-  const seedPhrase = params.seed!.trim();
-  if (!validateMnemonic(seedPhrase, wordlist)) {
-    console.error(JSON.stringify({
-      error: true,
-      message: 'Invalid seed phrase. Must be a valid BIP-39 mnemonic (12 or 24 words).',
-      timestamp: new Date().toISOString(),
-    }, null, 2));
-    process.exit(1);
-  }
-
-  // Validate token address format for EVM
   if (params.token && params.chain === 'evm') {
     if (!params.token.match(/^0x[a-fA-F0-9]{40}$/)) {
       console.error(JSON.stringify({
@@ -103,7 +82,6 @@ function parseArgs(args: string[]): GetBalanceParams {
 
   return {
     chain: params.chain!,
-    seed: seedPhrase,
     index: params.index!,
     token: params.token,
   };
@@ -217,15 +195,16 @@ async function getSolanaBalance(seedPhrase: string, index: number, tokenAddress?
 
 async function main() {
   const args = process.argv.slice(2);
+  const { seed } = loadSeed(args);
   const params = parseArgs(args);
 
   try {
     let balanceInfo;
 
     if (params.chain === 'evm') {
-      balanceInfo = await getEvmBalance(params.seed, params.index, params.token);
+      balanceInfo = await getEvmBalance(seed, params.index, params.token);
     } else {
-      balanceInfo = await getSolanaBalance(params.seed, params.index, params.token);
+      balanceInfo = await getSolanaBalance(seed, params.index, params.token);
     }
 
     const result = {

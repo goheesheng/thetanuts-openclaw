@@ -8,17 +8,12 @@ metadata: {"openclaw":{"emoji":"📈","install":[{"type":"node","package":"."}]}
 
 ## First-Time Setup (Onboarding Flow)
 
-**IMPORTANT: On EVERY new conversation, the agent MUST run these checks before doing anything else.**
+### Startup Checks
 
-### Automatic Startup Checks
+On a new conversation the agent should:
 
 ```
-Step 0: Check for skill updates (ALWAYS run first)
-   └─> bash scripts/update.sh
-   └─> If update found: inform user "Skill updated to vX.Y.Z — reloading with latest features"
-   └─> If already up to date: proceed silently (don't mention it)
-
-Step 1: Check wallet status
+Step 1: Check wallet status (read-only, safe to run automatically)
    └─> node scripts/wallet-discover.js
 
 Step 2: Interpret the result:
@@ -26,7 +21,17 @@ Step 2: Interpret the result:
    - configured: true  → Greet user with their address, proceed normally
 ```
 
-**Why always check for updates?** The skill evolves frequently with new option types, SDK features, and bug fixes. Running `update.sh` ensures the agent always has the latest trading capabilities. Updates NEVER modify wallet secrets (.env, WDK_SEED).
+### Updates (User-Initiated Only)
+
+The agent must NEVER run `update.sh` automatically. Updates change code that signs
+transactions, so they require explicit user consent each time.
+
+When the user asks to check for or apply updates:
+- Run `bash scripts/update.sh` and surface the full output to the user.
+- If a new version is available, summarize the diff/changelog and ask the user
+  to confirm before applying.
+- If already up to date, say so explicitly. Do not run code-changing commands
+  silently.
 
 ### Onboarding Mode (No Wallet Detected)
 
@@ -526,7 +531,7 @@ You → Fill existing order → Instant trade
 **How it works:**
 1. Fetch orderbook: `npx tsx scripts/fetch-orders.ts --type PUT`
 2. See available BIDs (buyers) and ASKs (sellers)
-3. Fill the order you want: `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute`
+3. Fill the order you want: `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --execute` (reads `WDK_SEED` from `.env`)
 
 ### RFQ (Request for Quote)
 
@@ -673,10 +678,10 @@ Step 3: Fetch orderbook
    └─> npx tsx scripts/fetch-orders.ts --type PUT
 
 Step 4: Preview fill (see what you'll get)
-   └─> npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..."
+   └─> npx tsx scripts/fill-order.ts --order-index 0 --collateral 10
 
-Step 5: Execute fill
-   └─> npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute --wait
+Step 5: Execute fill (reads WDK_SEED from .env — never pass seed on CLI)
+   └─> npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --execute --wait
 ```
 
 ### Workflow 2: Submit an RFQ (Custom Terms)
@@ -690,11 +695,12 @@ Step 2: Get MM pricing to see market levels
 Step 3: Build RFQ with your terms
    └─> npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry 1774684800 --contracts 0.1 --direction buy
 
-Step 4: Approve tokens (if selling/first time)
-   └─> npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x8118daD971dEbffB49B9280047659174128A8B94 --max --seed "..." --wait
+Step 4: Approve tokens (if selling/first time — prefer exact amount over --max)
+   └─> npx tsx scripts/approve-token.ts --token 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 --spender 0x8118daD971dEbffB49B9280047659174128A8B94 --amount <exact> --wait
+   (For unlimited approvals, add --max --confirm-max. Seed read from WDK_SEED env.)
 
-Step 5: Send RFQ transaction
-   └─> npx tsx scripts/send-transaction.ts --to <from step 3> --data <from step 3> --seed "..." --wait
+Step 5: Send RFQ transaction (reads WDK_SEED from .env)
+   └─> npx tsx scripts/send-transaction.ts --to <from step 3> --data <from step 3> --wait
 
 Step 6: Wait for MM offer (up to 45 seconds)
 
@@ -1709,11 +1715,11 @@ When a user asks a technical question about the Thetanuts SDK:
 
 | Command | Description |
 |---------|-------------|
-| `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute` | Fill orderbook order |
+| `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --execute` | Fill orderbook order (reads `WDK_SEED` env) |
 | `npx tsx scripts/build-rfq.ts --underlying ETH --type PUT --strike 1900 --expiry <ts> --contracts 0.1 --direction buy` | Build vanilla RFQ (45s deadline) |
 | `npx tsx scripts/build-rfq.ts --underlying ETH --type CALL --strikes 2000,2100 --expiry <ts> --contracts 1 --direction buy` | Build multi-strike RFQ (spread/fly/condor) |
-| `npx tsx scripts/approve-token.ts --token <addr> --spender <addr> --max --seed "..."` | Approve tokens |
-| `npx tsx scripts/send-transaction.ts --to <addr> --data <hex> --seed "..."` | Send transaction |
+| `npx tsx scripts/approve-token.ts --token <addr> --spender <addr> --amount <n>` | Approve tokens (exact amount; add `--max --confirm-max` for unlimited) |
+| `npx tsx scripts/send-transaction.ts --to <addr> --data <hex>` | Send transaction (reads `WDK_SEED` env) |
 | `npx tsx scripts/check-rfq-fill.ts --address <wallet> --ticker <expected> --since <ts>` | Verify RFQ fill status |
 
 ### Position Commands
@@ -1807,13 +1813,18 @@ The SDK's `optionImplementations` map still resolves these for parsing pre-r12 p
 
 ## Updates
 
-**Updates are checked automatically at the start of every conversation** (see First-Time Setup). The agent runs `update.sh` silently and only notifies the user if a new version is installed.
+Updates are **user-initiated only** — the agent must never run `update.sh`
+automatically. Updates change code that signs transactions, so they require
+explicit consent each time.
 
-To manually check or force dependency updates:
+To check for or apply an update:
 
 ```bash
 bash scripts/update.sh
 ```
+
+The agent should surface the script's full output, summarize any version
+change, and ask the user to confirm before any code-changing step runs.
 
 Optional flags:
 - `REFRESH_WDK_DEPS=1` - Refresh dependencies from lockfile

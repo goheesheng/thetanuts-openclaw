@@ -1,16 +1,17 @@
 #!/usr/bin/env npx tsx
 /**
- * Fill an orderbook order on Thetanuts Finance
- * Usage: npx tsx fill-order.ts --order-index <number> --collateral <amount> --seed "..." [--execute] [--wait]
+ * Fill an orderbook order on Thetanuts Finance.
+ * Seed is read from WDK_SEED env var (or --seed-file) — never from argv.
  *
- * Examples:
- *   npx tsx fill-order.ts --order-index 0 --collateral 10 --seed "..."          # Preview only
- *   npx tsx fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute # Execute fill
- *   npx tsx fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute --wait # Execute and wait
+ * Usage:
+ *   WDK_SEED="..." npx tsx fill-order.ts --order-index <n> --collateral <amount> [--execute] [--wait]
+ *
+ * Without --execute, the script previews the fill without signing.
  */
 
 import { ThetanutsClient } from '@thetanuts-finance/thetanuts-client';
 import { JsonRpcProvider, Wallet, HDNodeWallet } from 'ethers';
+import { loadSeed } from './lib/load-seed';
 
 const RPC_URL = process.env.THETANUTS_RPC_URL || 'https://mainnet.base.org';
 const CHAIN_ID = 8453;
@@ -25,7 +26,6 @@ const KNOWN_TOKENS: Record<string, { symbol: string; decimals: number }> = {
 interface FillParams {
   orderIndex: number;
   collateral: number;
-  seed: string;
   walletIndex: number;
   execute: boolean;
   wait: boolean;
@@ -47,9 +47,6 @@ function parseArgs(args: string[]): FillParams | null {
       case '--collateral':
         params.collateral = parseFloat(args[++i]);
         break;
-      case '--seed':
-        params.seed = args[++i];
-        break;
       case '--index':
         params.walletIndex = parseInt(args[++i]) || 0;
         break;
@@ -65,19 +62,17 @@ function parseArgs(args: string[]): FillParams | null {
     }
   }
 
-  // Validate required params
   const missing: string[] = [];
   if (params.orderIndex === undefined || isNaN(params.orderIndex)) missing.push('--order-index');
   if (params.collateral === undefined || isNaN(params.collateral)) missing.push('--collateral');
-  if (!params.seed) missing.push('--seed');
 
   if (missing.length > 0) {
     console.error(JSON.stringify({
       error: true,
       message: 'Missing required parameters',
       missing,
-      usage: 'npx tsx fill-order.ts --order-index <number> --collateral <amount> --seed "..." [--execute] [--wait]',
-      example: 'npx tsx fill-order.ts --order-index 0 --collateral 10 --seed "word1 word2 ... word12" --execute --wait',
+      usage: 'WDK_SEED="..." npx tsx fill-order.ts --order-index <number> --collateral <amount> [--execute] [--wait]',
+      example: 'WDK_SEED="word1 word2 ... word12" npx tsx fill-order.ts --order-index 0 --collateral 10 --execute --wait',
       help: {
         orderIndex: 'Index of order from fetch-orders.ts output (0-based)',
         collateral: 'Amount of collateral in token units (e.g., 10 for 10 USDC)',
@@ -107,15 +102,16 @@ async function main() {
     process.exit(1);
   }
 
+  // Only load the seed when we actually need to sign — preview mode stays read-only.
+  const seed = params.execute ? loadSeed(args).seed : undefined;
+
   const provider = new JsonRpcProvider(RPC_URL);
 
-  // For preview, we don't need a signer
-  // For execute, we create a wallet from seed
   let client: ThetanutsClient;
   let signer: Wallet | HDNodeWallet | undefined;
 
   if (params.execute) {
-    signer = Wallet.fromPhrase(params.seed, provider);
+    signer = Wallet.fromPhrase(seed!, provider);
     client = new ThetanutsClient({
       chainId: CHAIN_ID,
       provider,
@@ -229,7 +225,7 @@ async function main() {
       console.log(JSON.stringify({
         ...previewResult,
         nextStep: 'Add --execute flag to fill this order',
-        command: `npx tsx fill-order.ts --order-index ${params.orderIndex} --collateral ${params.collateral} --seed "..." --execute --wait`,
+        command: `WDK_SEED="..." npx tsx fill-order.ts --order-index ${params.orderIndex} --collateral ${params.collateral} --execute --wait`,
       }, null, 2));
       return;
     }

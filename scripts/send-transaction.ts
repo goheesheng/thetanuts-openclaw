@@ -1,22 +1,19 @@
 #!/usr/bin/env npx tsx
 /**
- * Sign and broadcast an EVM transaction
- * Usage: npx tsx send-transaction.ts --to <address> --data <hex> --seed "<seed phrase>" [--value <wei>] [--wait]
+ * Sign and broadcast an EVM transaction.
+ * Seed is read from WDK_SEED env var (or --seed-file) — never from argv.
  *
- * Example:
- *   npx tsx send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "word1 word2 ... word12" --wait
+ * Usage: WDK_SEED="..." npx tsx send-transaction.ts --to <address> --data <hex> [--value <wei>] [--wait]
  */
 
-import { validateMnemonic } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english';
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm';
+import { loadSeed } from './lib/load-seed';
 
 const EVM_RPC_URL = process.env.THETANUTS_RPC_URL || 'https://mainnet.base.org';
 
 interface SendTransactionParams {
   to: string;
   data: string;
-  seed: string;
   value: string;
   index: number;
   gasLimit?: number;
@@ -41,9 +38,6 @@ function parseArgs(args: string[]): SendTransactionParams {
       case '--data':
         params.data = args[++i];
         break;
-      case '--seed':
-        params.seed = args[++i];
-        break;
       case '--value':
         params.value = args[++i];
         break;
@@ -54,7 +48,6 @@ function parseArgs(args: string[]): SendTransactionParams {
         params.gasLimit = parseInt(args[++i]);
         break;
       case '--gas-price':
-        // Convert gwei to wei
         const gweiValue = parseFloat(args[++i]);
         params.gasPrice = BigInt(Math.floor(gweiValue * 1e9));
         break;
@@ -67,36 +60,22 @@ function parseArgs(args: string[]): SendTransactionParams {
     }
   }
 
-  // Validate required params
   const missing: string[] = [];
   if (!params.to) missing.push('--to <address>');
   if (!params.data) missing.push('--data <hex>');
-  if (!params.seed) missing.push('--seed "<seed phrase>"');
 
   if (missing.length > 0) {
     console.error(JSON.stringify({
       error: true,
       message: 'Missing required parameters',
       missing,
-      usage: 'npx tsx send-transaction.ts --to <address> --data <hex> --seed "<seed phrase>" [--value <wei>] [--gas-limit <number>] [--gas-price <gwei>] [--wait] [--timeout <ms>]',
-      example: 'npx tsx send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --seed "word1 word2 ... word12" --wait',
+      usage: 'WDK_SEED="..." npx tsx send-transaction.ts --to <address> --data <hex> [--value <wei>] [--gas-limit <number>] [--gas-price <gwei>] [--wait] [--timeout <ms>]',
+      example: 'WDK_SEED="word1 word2 ... word12" npx tsx send-transaction.ts --to 0x1aDcD391CF15Fb699Ed29B1D394F4A64106886e5 --data 0xb5da63e3... --wait',
       timestamp: new Date().toISOString(),
     }, null, 2));
     process.exit(1);
   }
 
-  // Validate seed phrase
-  const seedPhrase = params.seed!.trim();
-  if (!validateMnemonic(seedPhrase, wordlist)) {
-    console.error(JSON.stringify({
-      error: true,
-      message: 'Invalid seed phrase. Must be a valid BIP-39 mnemonic (12 or 24 words).',
-      timestamp: new Date().toISOString(),
-    }, null, 2));
-    process.exit(1);
-  }
-
-  // Validate address format
   if (!params.to!.match(/^0x[a-fA-F0-9]{40}$/)) {
     console.error(JSON.stringify({
       error: true,
@@ -106,7 +85,6 @@ function parseArgs(args: string[]): SendTransactionParams {
     process.exit(1);
   }
 
-  // Validate data format
   if (!params.data!.match(/^0x[a-fA-F0-9]*$/)) {
     console.error(JSON.stringify({
       error: true,
@@ -119,7 +97,6 @@ function parseArgs(args: string[]): SendTransactionParams {
   return {
     to: params.to!,
     data: params.data!,
-    seed: seedPhrase,
     value: params.value!,
     index: params.index!,
     gasLimit: params.gasLimit,
@@ -131,9 +108,10 @@ function parseArgs(args: string[]): SendTransactionParams {
 
 async function main() {
   const args = process.argv.slice(2);
+  const { seed } = loadSeed(args);
   const params = parseArgs(args);
 
-  const wallet = new WalletManagerEvm(params.seed, {
+  const wallet = new WalletManagerEvm(seed, {
     provider: EVM_RPC_URL,
   });
 

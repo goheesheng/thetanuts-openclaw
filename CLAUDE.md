@@ -30,7 +30,7 @@
 
 ## Common Commands
 - `node scripts/wallet-create.js` - Create wallet (must have no existing WDK_SEED in .env)
-- `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --seed "..." --execute --wait` - Fill order
+- `npx tsx scripts/fill-order.ts --order-index 0 --collateral 10 --execute --wait` - Fill order (reads `WDK_SEED` env from `.env`)
 - `npx tsx scripts/check-orderbook.ts --underlying ETH --type PUT --strike 1900 --expiry <ts> --direction sell` - Check liquidity
 - `bash scripts/onboard.sh` - Full setup (installs both dep targets)
 - `bash scripts/update.sh` - Check for manifest-based updates

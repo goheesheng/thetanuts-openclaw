@@ -1,24 +1,20 @@
 #!/usr/bin/env npx tsx
 /**
- * Import an existing wallet using seed phrase
- * Usage: npx tsx import-wallet.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>]
+ * Import an existing wallet using seed phrase.
+ * Seed is read from WDK_SEED env var (or --seed-file) — never from argv.
  *
- * Example:
- *   npx tsx import-wallet.ts --chain evm --seed "word1 word2 ... word12"
- *   npx tsx import-wallet.ts --chain solana --seed "word1 word2 ... word12" --index 0
+ * Usage: WDK_SEED="..." npx tsx import-wallet.ts --chain <evm|solana> [--index <n>]
  */
 
-import { validateMnemonic } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english';
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm';
 import WalletManagerSolana from '@tetherto/wdk-wallet-solana';
+import { loadSeed } from './lib/load-seed';
 
 const EVM_RPC_URL = process.env.THETANUTS_RPC_URL || 'https://mainnet.base.org';
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 interface ImportWalletParams {
   chain: 'evm' | 'solana';
-  seed: string;
   index: number;
 }
 
@@ -35,39 +31,22 @@ function parseArgs(args: string[]): ImportWalletParams {
           params.chain = chain;
         }
         break;
-      case '--seed':
-        params.seed = args[++i];
-        break;
       case '--index':
         params.index = parseInt(args[++i]) || 0;
         break;
     }
   }
 
-  // Validate required params
   const missing: string[] = [];
   if (!params.chain) missing.push('--chain (evm|solana)');
-  if (!params.seed) missing.push('--seed "<seed phrase>"');
 
   if (missing.length > 0) {
     console.error(JSON.stringify({
       error: true,
       message: 'Missing required parameters',
       missing,
-      usage: 'npx tsx import-wallet.ts --chain <evm|solana> --seed "<seed phrase>" [--index <number>]',
-      example: 'npx tsx import-wallet.ts --chain evm --seed "word1 word2 ... word12"',
-      timestamp: new Date().toISOString(),
-    }, null, 2));
-    process.exit(1);
-  }
-
-  // Validate seed phrase is valid BIP-39
-  const seedPhrase = params.seed!.trim();
-  if (!validateMnemonic(seedPhrase, wordlist)) {
-    console.error(JSON.stringify({
-      error: true,
-      message: 'Invalid seed phrase. Must be a valid BIP-39 mnemonic (12 or 24 words).',
-      hint: 'Check that all words are spelled correctly and are valid BIP-39 words.',
+      usage: 'WDK_SEED="..." npx tsx import-wallet.ts --chain <evm|solana> [--index <number>]',
+      example: 'WDK_SEED="word1 word2 ... word12" npx tsx import-wallet.ts --chain evm',
       timestamp: new Date().toISOString(),
     }, null, 2));
     process.exit(1);
@@ -75,7 +54,6 @@ function parseArgs(args: string[]): ImportWalletParams {
 
   return {
     chain: params.chain!,
-    seed: seedPhrase,
     index: params.index!,
   };
 }
@@ -120,15 +98,16 @@ async function importSolanaWallet(seedPhrase: string, index: number) {
 
 async function main() {
   const args = process.argv.slice(2);
+  const { seed } = loadSeed(args);
   const params = parseArgs(args);
 
   try {
     let walletInfo;
 
     if (params.chain === 'evm') {
-      walletInfo = await importEvmWallet(params.seed, params.index);
+      walletInfo = await importEvmWallet(seed, params.index);
     } else {
-      walletInfo = await importSolanaWallet(params.seed, params.index);
+      walletInfo = await importSolanaWallet(seed, params.index);
     }
 
     // NOTE: We do NOT include the seed phrase in the output for import

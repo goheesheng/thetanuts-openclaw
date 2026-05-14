@@ -1,23 +1,20 @@
 #!/usr/bin/env npx tsx
 /**
- * Sign a message with wallet private key
- * Usage: npx tsx sign-message.ts --chain <evm|solana> --seed "<seed phrase>" --message "<message>" [--index <number>]
+ * Sign a message with wallet private key.
+ * Seed is read from WDK_SEED env var (or --seed-file) — never from argv.
  *
- * Example:
- *   npx tsx sign-message.ts --chain evm --seed "word1 word2 ... word12" --message "Hello World"
+ * Usage: WDK_SEED="..." npx tsx sign-message.ts --chain <evm|solana> --message "<message>" [--index <number>]
  */
 
-import { validateMnemonic } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english';
 import WalletManagerEvm from '@tetherto/wdk-wallet-evm';
 import WalletManagerSolana from '@tetherto/wdk-wallet-solana';
+import { loadSeed } from './lib/load-seed';
 
 const EVM_RPC_URL = process.env.THETANUTS_RPC_URL || 'https://mainnet.base.org';
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 interface SignMessageParams {
   chain: 'evm' | 'solana';
-  seed: string;
   message: string;
   index: number;
 }
@@ -35,9 +32,6 @@ function parseArgs(args: string[]): SignMessageParams {
           params.chain = chain;
         }
         break;
-      case '--seed':
-        params.seed = args[++i];
-        break;
       case '--message':
         params.message = args[++i];
         break;
@@ -47,10 +41,8 @@ function parseArgs(args: string[]): SignMessageParams {
     }
   }
 
-  // Validate required params
   const missing: string[] = [];
   if (!params.chain) missing.push('--chain (evm|solana)');
-  if (!params.seed) missing.push('--seed "<seed phrase>"');
   if (!params.message) missing.push('--message "<message to sign>"');
 
   if (missing.length > 0) {
@@ -58,19 +50,8 @@ function parseArgs(args: string[]): SignMessageParams {
       error: true,
       message: 'Missing required parameters',
       missing,
-      usage: 'npx tsx sign-message.ts --chain <evm|solana> --seed "<seed phrase>" --message "<message>" [--index <number>]',
-      example: 'npx tsx sign-message.ts --chain evm --seed "word1 word2 ... word12" --message "Hello World"',
-      timestamp: new Date().toISOString(),
-    }, null, 2));
-    process.exit(1);
-  }
-
-  // Validate seed phrase
-  const seedPhrase = params.seed!.trim();
-  if (!validateMnemonic(seedPhrase, wordlist)) {
-    console.error(JSON.stringify({
-      error: true,
-      message: 'Invalid seed phrase. Must be a valid BIP-39 mnemonic (12 or 24 words).',
+      usage: 'WDK_SEED="..." npx tsx sign-message.ts --chain <evm|solana> --message "<message>" [--index <number>]',
+      example: 'WDK_SEED="word1 word2 ... word12" npx tsx sign-message.ts --chain evm --message "Hello World"',
       timestamp: new Date().toISOString(),
     }, null, 2));
     process.exit(1);
@@ -78,7 +59,6 @@ function parseArgs(args: string[]): SignMessageParams {
 
   return {
     chain: params.chain!,
-    seed: seedPhrase,
     message: params.message!,
     index: params.index!,
   };
@@ -124,15 +104,16 @@ async function signSolanaMessage(seedPhrase: string, index: number, message: str
 
 async function main() {
   const args = process.argv.slice(2);
+  const { seed } = loadSeed(args);
   const params = parseArgs(args);
 
   try {
     let signatureInfo;
 
     if (params.chain === 'evm') {
-      signatureInfo = await signEvmMessage(params.seed, params.index, params.message);
+      signatureInfo = await signEvmMessage(seed, params.index, params.message);
     } else {
-      signatureInfo = await signSolanaMessage(params.seed, params.index, params.message);
+      signatureInfo = await signSolanaMessage(seed, params.index, params.message);
     }
 
     const result = {
